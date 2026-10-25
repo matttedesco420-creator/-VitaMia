@@ -1,5 +1,5 @@
 // Muss bei jeder Änderung hochgezählt werden - identisch zu APP_VERSION in index.html
-const APP_VERSION = "v3";
+const APP_VERSION = "v5";
 const CACHE_PREFIX = "ausgaben-";
 const CACHE_NAME = CACHE_PREFIX + APP_VERSION;
 const APP_SHELL = [

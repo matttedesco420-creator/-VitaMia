@@ -167,6 +167,23 @@
   .note.err{background:var(--danger-dim);color:#ffd3d2;}
   .note.info{background:var(--accent-dim);color:var(--accent-bright);}
 
+  /* ---------- Abbuchungsliste pruefen ---------- */
+  .ls-tools{display:flex;gap:16px;margin:-2px 0 10px;}
+  .ls-row{display:flex;gap:12px;padding:11px 12px;background:var(--bg);border:1px solid var(--border);border-radius:12px;margin-bottom:6px;}
+  .ls-row.off{opacity:.5;}
+  .ls-check{padding-top:1px;}
+  .ls-check input{width:22px;height:22px;accent-color:var(--accent);margin:0;cursor:pointer;}
+  .ls-main{flex:1;min-width:0;}
+  .ls-top{display:flex;justify-content:space-between;gap:10px;font-weight:650;font-size:14.5px;}
+  .ls-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ls-amt{white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .ls-meta{font-size:12px;color:var(--text-faint);margin:3px 0 8px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;}
+  .tag{font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--surface-2);color:var(--text-dim);}
+  .tag.dup{background:var(--danger-dim);color:#ffd3d2;}
+  .tag.warn{background:var(--warn-dim);color:var(--warn);}
+  .ls-cat{padding:7px 34px 7px 10px;}
+  .sticky-actions{position:sticky;bottom:calc(-18px - env(safe-area-inset-bottom));background:var(--surface);padding:12px 0 6px;margin-top:8px;border-top:1px solid var(--border);}
+
   /* ---------- Navigation unten ---------- */
   .nav{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(38,41,46,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
     border-top:1px solid var(--border);padding:7px 0 calc(7px + env(safe-area-inset-bottom));}
@@ -230,7 +247,7 @@
     <div class="scan-wrap">
       <button class="scan-btn" id="scanBtn"><span class="ic">📷</span>Beleg scannen</button>
       <button class="entry-btn" id="newEntryBtn">＋ Eintrag erstellen</button>
-      <button class="link-btn" id="galleryBtn">oder Foto / PDF aus Galerie & Dateien wählen</button>
+      <button class="link-btn" id="galleryBtn">oder Fotos, Abbuchungs-Screenshots oder PDFs wählen</button>
       <div class="queue" id="queue"></div>
     </div>
     <input type="file" id="cameraInput" accept="image/*" capture="environment">
@@ -348,7 +365,7 @@
 <script src="lib/jspdf.umd.min.js"></script>
 <script src="lib/pdf.min.js"></script>
 <script>
-const APP_VERSION = "v3";
+const APP_VERSION = "v5";
 const AI_MODEL = "claude-sonnet-5";
 
 // Eigene Schluessel, damit sich die App nicht mit der Belegverwaltung
@@ -412,7 +429,9 @@ function cleanEntry(e){
     waehrung:/^[A-Z]{3}$/.test(e.waehrung||'') ? e.waehrung : 'EUR', kurs:num(e.kurs) ?? 1,
     kategorie:String(e.kategorie||''), unsicher:!!e.unsicher, hinweis:String(e.hinweis||'').slice(0,300),
     hash:typeof e.hash==='string' ? e.hash.slice(0,40) : '', erstellt:typeof e.erstellt==='string' ? e.erstellt.slice(0,30) : '',
-    seiten:num(e.seiten) ?? 0, hatBild:!!e.hatBild, bildAusgelagert:!!e.bildAusgelagert
+    seiten:num(e.seiten) ?? 0, hatBild:!!e.hatBild, bildAusgelagert:!!e.bildAusgelagert,
+    uhrzeit:/^\d{2}:\d{2}$/.test(e.uhrzeit||'') ? e.uhrzeit : '',
+    quelle:e.quelle==='konto' ? 'konto' : ''
   };
 }
 function dayLabel(iso){
@@ -761,7 +780,7 @@ function renderDetail(){
   document.getElementById('detailExportInfo').textContent = info;
 
   const shown = (detailFilter ? st.list.filter(e=>e.kategorie===detailFilter) : st.list)
-    .sort((a,b)=> (b.datum||'').localeCompare(a.datum||'') || (b.erstellt||'').localeCompare(a.erstellt||''));
+    .sort((a,b)=> (b.datum||'').localeCompare(a.datum||'') || (b.uhrzeit||'').localeCompare(a.uhrzeit||'') || (b.erstellt||'').localeCompare(a.erstellt||''));
 
   const listEl = document.getElementById('detailEntries');
   if(!shown.length){
@@ -777,13 +796,13 @@ function renderDetail(){
       lastDay = e.datum;
     }
     const c = catById(e.kategorie);
-    const meta = [c.name, e.notiz].filter(Boolean).join(' · ');
+    const meta = [e.uhrzeit, c.name, e.notiz].filter(Boolean).join(' · ');
     const fremd = (e.waehrung && e.waehrung!=='EUR' && e.betragOriginal!=null) ? ` · ${amountInput(e.betragOriginal)} ${e.waehrung}` : '';
     html += `<div class="entry" data-id="${esc(e.id)}">
       <div class="cat-ic" style="background:${esc(c.color)};color:${textOn(c.color)}">${esc((c.name||'?').charAt(0).toUpperCase())}</div>
       <div class="info">
         <div class="t">${esc(e.haendler||'Ohne Bezeichnung')}${e.unsicher?'<span class="badge">prüfen</span>':''}</div>
-        <div class="m">${e.hatBild?'📎 ':''}${esc(meta)}${esc(fremd)}</div>
+        <div class="m">${e.hatBild?'📎 ':(e.quelle==='konto'?'💳 ':'')}${esc(meta)}${esc(fremd)}</div>
       </div>
       <div class="a">${fmtEUR(e.betrag)}</div>
     </div>`;
@@ -857,18 +876,43 @@ async function fileHash(file){
 // ---------- Auslesen ueber die Anthropic-API ----------
 function buildPrompt(){
   const catList = categories.map(c=>`"${c.name}"`).join(' | ');
-  return `Du bekommst ein oder mehrere Fotos/Seiten EINES Kassenbons, einer Quittung oder einer Rechnung aus dem privaten Alltag. Werte alle Seiten gemeinsam als ein Dokument aus – der Gesamtbetrag steht oft am Ende.
-Heute ist der ${dateShort(todayISO())}. Ist auf dem Beleg kein Jahr erkennbar, nimm das wahrscheinlichste (meist das aktuelle).
+  return `Du bekommst ein oder mehrere Bilder bzw. Seiten EINES Dokuments aus dem privaten Alltag. Heute ist der ${dateShort(todayISO())}.
 
-Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Erklärung und ohne Markdown:
-{"datum":"JJJJ-MM-TT","haendler":"Name des Geschäfts oder Anbieters","betrag_original":12.34,"waehrung_original":"EUR","kurs_zu_eur":1.0,"betrag_eur":12.34,"kategorie":"...","beschreibung":"2–4 Wörter, was gekauft wurde","unsicher":false,"hinweis":""}
+Bestimme zuerst, was es ist:
 
-Regeln:
-- "betrag_original" ist der tatsächlich bezahlte Gesamtbetrag (inkl. MwSt., nach Rabatten) – nicht Zwischensumme, nicht gegebenes Bargeld, nicht Rückgeld.
+A) Ein einzelner Kassenbon, eine Quittung oder eine Rechnung. Antworte dann mit:
+{"art":"beleg","datum":"JJJJ-MM-TT","haendler":"Name des Geschäfts oder Anbieters","betrag_original":12.34,"waehrung_original":"EUR","kurs_zu_eur":1.0,"betrag_eur":12.34,"kategorie":"...","beschreibung":"2–4 Wörter, was gekauft wurde","unsicher":false,"hinweis":""}
+
+B) Eine Liste mehrerer Kontobewegungen (Screenshot einer Banking- oder Kreditkarten-App, Umsatzliste, Kontoauszug). Antworte dann mit:
+{"art":"liste","posten":[{"datum":"JJJJ-MM-TT","uhrzeit":"HH:MM","haendler":"...","betrag":12.34,"waehrung":"EUR","betrag_eur":12.34,"typ":"ausgabe","kategorie":"...","unsicher":false}]}
+
+Antworte AUSSCHLIESSLICH mit dem JSON-Objekt, ohne Erklärung und ohne Markdown.
+
+Regeln für beide Arten:
 - "kategorie" MUSS exakt einer dieser Werte sein: ${catList}
-  Entscheide nach dem Inhalt des Einkaufs, nicht nur nach dem Namen des Geschäfts. Passt nichts, nimm die Kategorie für Sonstiges bzw. die letzte der Liste.
-- Bei EUR: kurs_zu_eur = 1.0 und betrag_eur = betrag_original. Andere Währung: Kurs schätzen, betrag_eur auf 2 Nachkommastellen berechnen, hinweis = "Wechselkurs geschätzt, bitte prüfen".
-- Unlesbare Felder auf null setzen, "unsicher": true und den Grund kurz im hinweis nennen.`;
+  Wähle die inhaltlich passendste. Passt nichts, nimm die Kategorie für Sonstiges bzw. die letzte der Liste.
+- Fehlt das Jahr, nimm das aktuelle. Läge das Datum damit in der Zukunft, nimm das Vorjahr.
+- Andere Währung als EUR: Kurs schätzen, Betrag in EUR auf 2 Nachkommastellen berechnen.
+
+Regeln für A (beleg):
+- "betrag_original" ist der tatsächlich bezahlte Gesamtbetrag (inkl. MwSt., nach Rabatten) – nicht Zwischensumme, nicht gegebenes Bargeld, nicht Rückgeld.
+- Bei EUR: kurs_zu_eur = 1.0 und betrag_eur = betrag_original. Bei geschätztem Kurs: hinweis = "Wechselkurs geschätzt, bitte prüfen".
+- Unlesbare Felder auf null setzen, "unsicher": true und den Grund kurz im hinweis nennen.
+
+Regeln für B (liste):
+- Jede Bewegung genau einmal aufnehmen. Keine Tagessummen, Kontostände oder Überschriften als Posten.
+- Das Datum steht meist als Tagesüberschrift (z. B. "9. Oktober") über einer Gruppe; alle Zeilen darunter gehören zu diesem Tag, bis die nächste Überschrift kommt.
+- Zeilen oberhalb der ersten sichtbaren Tagesüberschrift: Nutze das Datum, das ganz oben auf dem Bildschirm angezeigt wird, wenn es zur Uhrzeit einer dieser Zeilen passt (z. B. "3. Oktober, 11:22"). Lässt es sich nicht sicher bestimmen, schätze es aus dem Zusammenhang und setze "unsicher": true.
+- Zeilen, die am oberen oder unteren Bildrand abgeschnitten sind und deren Name oder Betrag nicht vollständig lesbar ist, weglassen.
+- "uhrzeit" wie angezeigt (HH:MM), sonst null. "haendler" so übernehmen, wie er dasteht – gekürzte Namen nicht ergänzen.
+- "betrag" immer als POSITIVE Zahl, auch wenn mit Minus angezeigt.
+- "typ":
+  "ausgabe" = Zahlung oder Abbuchung,
+  "eingang" = Gutschrift, Geldeingang, Rückerstattung (Plus-Betrag, oft grün),
+  "abgelehnt" = abgelehnte, stornierte oder durchgestrichene Buchung (z. B. "Unzureichendes Guthaben"),
+  "umbuchung" = Überweisung auf eigene Konten, Sparplan, Einzahlung auf Depot, Broker oder Krypto-Börse, Aufladung einer eigenen Karte,
+  "bargeld" = Abhebung am Geldautomaten.
+- Kategorie nach Art des Händlers wählen (z. B. Supermarkt, Bahn, Apotheke, Restaurant).`;
 }
 
 async function callApi(body){
@@ -890,7 +934,7 @@ async function extractReceipt(images){
   try{
     res = await callApi({
       model: AI_MODEL,
-      max_tokens: 800,
+      max_tokens: 8000,
       messages:[{ role:"user", content:[
         ...images.map(b64=>({ type:"image", source:{ type:"base64", media_type:"image/jpeg", data:b64 }})),
         { type:"text", text: buildPrompt() }
@@ -933,7 +977,68 @@ async function handleFiles(fileList){
     return;
   }
   const files = Array.from(fileList||[]).filter(f=>(f.type||'').startsWith('image/') || isPdf(f));
-  for(const f of files) await processFile(f);
+  if(!files.length) return;
+  // Bis zu 3 Dateien gleichzeitig auslesen
+  const posten = []; let listDateien = 0, idx = 0;
+  const worker = async () => {
+    while(idx < files.length){
+      const f = files[idx++];
+      const r = await processFile(f);
+      if(r && r.liste){ posten.push(...r.liste); listDateien++; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(3, files.length) }, worker));
+  if(posten.length){
+    // Nur Ausgaben: Eingaenge und abgelehnte Buchungen werden gar nicht erst angezeigt
+    const nurAusgaben = posten.filter(p=>p.typ!=='eingang' && p.typ!=='abgelehnt');
+    const ignoriert = posten.length - nurAusgaben.length;
+    if(!nurAusgaben.length){ toast('Keine Ausgaben gefunden – nur Eingänge oder abgelehnte Buchungen'); return; }
+    reviewQueue.push({ kind:'liste', posten: mergePosten(nurAusgaben), dateien: listDateien, ignoriert });
+    showNextReview();
+  }
+}
+
+// ---------- Abbuchungslisten ----------
+const POSTEN_TYPEN = { ausgabe:'Ausgabe', eingang:'Eingang', abgelehnt:'Abgelehnt', umbuchung:'Umbuchung', bargeld:'Bargeld' };
+const nameKey = n => String(n||'').toLowerCase().replace(/[^a-z0-9äöüß]/g,'').slice(0,8);
+
+function normPosten(p){
+  if(!p || typeof p !== 'object') return null;
+  const roh = parseAmount(p.betrag_eur ?? p.betrag);
+  if(roh == null || roh === 0) return null;
+  const datum = normDate(p.datum);
+  const katName = String(p.kategorie||'').trim().toLowerCase();
+  const cat = categories.find(c=>c.name.toLowerCase()===katName);
+  const waehrung = /^[A-Za-z]{3}$/.test(p.waehrung||'') ? p.waehrung.toUpperCase() : 'EUR';
+  const uhr = String(p.uhrzeit||'').match(/^(\d{1,2}):(\d{2})/);
+  return {
+    datum: datum || todayISO(),
+    uhrzeit: uhr ? pad2(uhr[1]) + ':' + uhr[2] : '',
+    haendler: String(p.haendler||'').trim().slice(0,120) || 'Unbekannt',
+    betrag: Math.abs(roh),
+    betragOriginal: waehrung!=='EUR' ? Math.abs(parseAmount(p.betrag) ?? 0) : null,
+    waehrung,
+    typ: POSTEN_TYPEN[p.typ] ? p.typ : 'ausgabe',
+    kategorie: cat ? cat.id : fallbackCatId(),
+    unsicher: !!p.unsicher || !datum,
+    hinweis: !datum ? 'Datum nicht erkannt – auf heute gesetzt.' : (waehrung!=='EUR' ? 'Wechselkurs geschätzt, bitte prüfen.' : '')
+  };
+}
+
+// Doppelte aus ueberlappenden Screenshots entfernen, mit Bestand abgleichen
+function mergePosten(list){
+  const out = [];
+  for(const p of list){
+    if(!p) continue;
+    const dup = out.some(q => q.datum===p.datum && Math.abs(q.betrag-p.betrag)<0.005 && nameKey(q.haendler)===nameKey(p.haendler)
+      && (q.uhrzeit===p.uhrzeit || !q.uhrzeit || !p.uhrzeit));
+    if(!dup) out.push(p);
+  }
+  out.forEach(p=>{
+    p.vorhanden = entries.find(e=>e.datum===p.datum && Math.abs((Number(e.betrag)||0)-p.betrag)<0.005) || null;
+    p.an = p.typ==='ausgabe' && !p.vorhanden;
+  });
+  return out.sort((a,b)=>b.datum.localeCompare(a.datum) || (b.uhrzeit||'').localeCompare(a.uhrzeit||''));
 }
 
 async function processFile(file){
@@ -956,6 +1061,13 @@ async function processFile(file){
     row.querySelector('.queue-thumb').src = 'data:image/jpeg;base64,' + images[0];
 
     const x = await extractReceipt(images);
+    if(x && x.art === 'liste'){
+      const liste = (Array.isArray(x.posten) ? x.posten : []).map(normPosten).filter(Boolean);
+      if(!liste.length) throw new Error('Keine Buchungen auf dem Bild erkannt.');
+      setStatus(`✓ ${liste.length} Buchung${liste.length===1?'':'en'} erkannt`, 'ok');
+      setTimeout(()=>{ row.style.opacity = '0'; setTimeout(()=>row.remove(), 450); }, 2500);
+      return { liste };
+    }
     const datum = normDate(x.datum);
     const katName = String(x.kategorie||'').trim().toLowerCase();
     const cat = categories.find(c=>c.name.toLowerCase()===katName);
@@ -985,6 +1097,7 @@ async function processFile(file){
 
     reviewQueue.push({ rec, images, filename: file.name || 'Foto' });
     showNextReview();
+    return null;
   }catch(err){
     console.error(err);
     setStatus('✕ Fehler <button class="del-btn" style="font-size:14px;padding:0 0 0 6px;">✕</button>', 'err');
@@ -993,6 +1106,7 @@ async function processFile(file){
     d.className = 'queue-error';
     d.textContent = err.message || 'Unbekannter Fehler';
     row.appendChild(d);
+    return null;
   }
 }
 
@@ -1007,7 +1121,108 @@ function findDuplicate(rec){
 function showNextReview(){
   if(sheet) return;
   const next = reviewQueue.shift();
-  if(next) openSheet({ mode:'review', ...next });
+  if(!next) return;
+  if(next.kind === 'liste') openListSheet(next);
+  else openSheet({ mode:'review', ...next });
+}
+
+function openListSheet(s){
+  sheet = { mode:'liste', ...s };
+  const el = document.getElementById('sheet');
+  const P = s.posten;
+  let rows = '', lastDay = null;
+  P.forEach((p,i)=>{
+    if(p.datum !== lastDay){ rows += `<div class="day-head"><span>${esc(dayLabel(p.datum))}</span></div>`; lastDay = p.datum; }
+    const tags = [];
+    if(p.typ !== 'ausgabe') tags.push(`<span class="tag">${esc(POSTEN_TYPEN[p.typ])}</span>`);
+    if(p.vorhanden) tags.push(`<span class="tag dup">schon erfasst: ${esc(p.vorhanden.haendler)}</span>`);
+    if(p.unsicher) tags.push(`<span class="tag warn">prüfen</span>`);
+    const fremd = p.waehrung!=='EUR' ? ` · ${esc(amountInput(p.betragOriginal))} ${esc(p.waehrung)}` : '';
+    rows += `<div class="ls-row${p.an?'':' off'}" data-i="${i}">
+      <label class="ls-check"><input type="checkbox" data-i="${i}" ${p.an?'checked':''}></label>
+      <div class="ls-main">
+        <div class="ls-top"><span class="ls-name">${esc(p.haendler)}</span><span class="ls-amt">${fmtEUR(p.betrag)}</span></div>
+        <div class="ls-meta"><span>${esc(dateShort(p.datum))}${p.uhrzeit?' · '+esc(p.uhrzeit):''}${fremd}</span>${tags.join('')}</div>
+        <select class="input ls-cat" data-i="${i}">${catOptions(p.kategorie)}</select>
+      </div>
+    </div>`;
+  });
+  const nAus = P.filter(p=>p.typ==='ausgabe').length;
+  const nAndere = P.length - nAus;
+  const nDup = P.filter(p=>p.vorhanden).length;
+  let info = `${P.length} Abbuchung${P.length===1?'':'en'} aus ${s.dateien} Screenshot${s.dateien===1?'':'s'} erkannt.`;
+  if(nAndere) info += ` ${nAndere} davon ${nAndere===1?'ist eine Umbuchung oder Bargeldabhebung':'sind Umbuchungen oder Bargeldabhebungen'} und nicht ausgewählt.`;
+  if(s.ignoriert) info += ` ${s.ignoriert} Eingänge bzw. abgelehnte Zahlungen wurden ignoriert.`;
+  if(nDup) info += ` ${nDup} ${nDup===1?'ist':'sind'} schon erfasst.`;
+
+  el.innerHTML = `
+    <div class="sheet-grip"></div>
+    <h2>Abbuchungen prüfen</h2>
+    <div class="sub">${reviewQueue.length ? 'noch ' + reviewQueue.length + ' weitere Prüfung(en)' : '&nbsp;'}</div>
+    <div class="note info">${esc(info)}</div>
+    <div class="ls-tools">
+      <button class="link-btn" id="lsAll">alle Ausgaben wählen</button>
+      <button class="link-btn" id="lsNone">keine wählen</button>
+    </div>
+    ${rows}
+    <div class="sticky-actions">
+      <div class="actions" style="margin-top:0;">
+        <button class="btn primary grow" id="lsSave"></button>
+        <button class="btn" id="lsCancel">Verwerfen</button>
+      </div>
+    </div>`;
+  document.getElementById('sheetBg').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  el.scrollTop = 0;
+
+  const update = ()=>{
+    const sel = P.filter(p=>p.an);
+    const sum = sel.reduce((a,p)=>a+p.betrag,0);
+    const b = document.getElementById('lsSave');
+    b.textContent = sel.length ? `✔ ${sel.length} speichern · ${fmtEUR(sum)}` : 'Nichts ausgewählt';
+    b.disabled = !sel.length;
+    el.querySelectorAll('.ls-row').forEach(r=>r.classList.toggle('off', !P[r.dataset.i].an));
+  };
+  el.querySelectorAll('input[type=checkbox][data-i]').forEach(cb=>cb.addEventListener('change', ()=>{ P[cb.dataset.i].an = cb.checked; update(); }));
+  el.querySelectorAll('select.ls-cat').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const p = P[sel.dataset.i];
+      if(sel.value !== '__neu__'){ p.kategorie = sel.value; return; }
+      const name = prompt('Name der neuen Kategorie:');
+      const cat = name ? addCategory(name) : null;
+      if(cat){
+        await saveCategories();
+        p.kategorie = cat.id;
+        el.querySelectorAll('select.ls-cat').forEach(o=>{ o.innerHTML = catOptions(P[o.dataset.i].kategorie); });
+      } else sel.value = p.kategorie;
+    });
+  });
+  const setAll = on => { P.forEach(p=>{ p.an = on && p.typ==='ausgabe' && !p.vorhanden; }); el.querySelectorAll('input[type=checkbox][data-i]').forEach(cb=>{ cb.checked = P[cb.dataset.i].an; }); update(); };
+  document.getElementById('lsAll').addEventListener('click', ()=>setAll(true));
+  document.getElementById('lsNone').addEventListener('click', ()=>setAll(false));
+  document.getElementById('lsCancel').addEventListener('click', ()=>{
+    if(P.some(p=>p.an) && !confirm('Erkannte Buchungen verwerfen?')) return;
+    closeSheet();
+  });
+  document.getElementById('lsSave').addEventListener('click', async ()=>{
+    const sel = P.filter(p=>p.an);
+    if(!sel.length) return;
+    const now = new Date().toISOString();
+    sel.forEach(p=>{
+      entries.push({
+        id:newId('e'), datum:p.datum, uhrzeit:p.uhrzeit, haendler:p.haendler, notiz:'',
+        betrag:p.betrag, betragOriginal:p.betragOriginal, waehrung:p.waehrung, kurs: p.waehrung==='EUR' ? 1 : null,
+        kategorie:p.kategorie, unsicher:p.unsicher, hinweis:p.hinweis, hash:'', erstellt:now,
+        seiten:0, hatBild:false, bildAusgelagert:false, quelle:'konto'
+      });
+    });
+    await saveEntries();
+    const monate = [...new Set(sel.map(p=>monthLabel(monthKey(p.datum))))];
+    toast(`${sel.length} Ausgabe${sel.length===1?'':'n'} gespeichert · ${monate.join(', ')}`);
+    closeSheet();
+    renderAll();
+  });
+  update();
 }
 
 function catOptions(sel){
@@ -1116,6 +1331,7 @@ function readSheet(){
   const betrag = parseAmount(document.getElementById('fBetrag').value);
   if(!isValidISO(datum)){ alert('Bitte ein gültiges Datum wählen.'); return null; }
   if(betrag == null){ alert('Bitte einen Betrag eintragen.'); return null; }
+  if(betrag < 0){ alert('Hier werden nur Ausgaben erfasst – bitte den Betrag ohne Minus eintragen.'); return null; }
   let kategorie = document.getElementById('fKat').value;
   if(kategorie === '__neu__') kategorie = fallbackCatId();
   return {
@@ -1178,7 +1394,7 @@ async function buildMonthPdf(key){
   const doc = new jsPDF({ unit:'mm', format:'a4' });
   const st = monthStats(key);
   const label = monthLabel(key);
-  const list = [...st.list].sort((a,b)=>(a.datum||'').localeCompare(b.datum||'') || (a.erstellt||'').localeCompare(b.erstellt||''));
+  const list = [...st.list].sort((a,b)=>(a.datum||'').localeCompare(b.datum||'') || (a.uhrzeit||'').localeCompare(b.uhrzeit||'') || (a.erstellt||'').localeCompare(b.erstellt||''));
   const cut = (t,n) => { t = String(t||''); return t.length>n ? t.slice(0,n-1)+'…' : t; };
   const BLUE = [37,99,235];
 
@@ -1238,7 +1454,7 @@ async function buildMonthPdf(key){
     doc.text(dateShort(r.datum), 23, y);
     doc.text(cut(r.haendler + (r.notiz ? ' – '+r.notiz : ''), 42), 45, y);
     doc.text(cut(catById(r.kategorie).name, 26), 112, y);
-    doc.text(r.hatBild ? 'ja' : (r.bildAusgelagert ? 'früheres PDF' : '—'), 160, y);
+    doc.text(r.hatBild ? 'ja' : (r.bildAusgelagert ? 'früheres PDF' : (r.quelle==='konto' ? 'Konto' : '—')), 160, y);
     doc.text(fmtEUR(r.betrag), 196, y, {align:'right'});
     y += 5.6;
   });
