@@ -345,10 +345,10 @@
   <button class="del-btn" id="dismissInstall">✕</button>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="lib/pdf.min.js"></script>
 <script>
-const APP_VERSION = "v1";
+const APP_VERSION = "v2";
 const AI_MODEL = "claude-sonnet-5";
 
 // Eigene Schluessel, damit sich die App nicht mit der Belegverwaltung
@@ -792,11 +792,11 @@ function fileToCompressedJpeg(file, maxW=1000, quality=0.7){
 }
 
 if(window.pdfjsLib){
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "lib/pdf.worker.min.js";
 }
 const MAX_PDF_PAGES = 6;
 async function pdfToJpegs(file, maxW=1100, quality=0.72){
-  if(!window.pdfjsLib) throw new Error('PDF-Leser konnte nicht geladen werden (Internet?)');
+  if(!window.pdfjsLib) throw new Error('PDF-Leser konnte nicht geladen werden');
   const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
   const n = Math.min(pdf.numPages, MAX_PDF_PAGES);
   const images = [];

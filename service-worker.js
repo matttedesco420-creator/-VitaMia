@@ -1,5 +1,5 @@
 // Muss bei jeder Änderung hochgezählt werden - identisch zu APP_VERSION in index.html
-const APP_VERSION = "v1";
+const APP_VERSION = "v2";
 const CACHE_PREFIX = "ausgaben-";
 const CACHE_NAME = CACHE_PREFIX + APP_VERSION;
 const APP_SHELL = [
@@ -7,7 +7,10 @@ const APP_SHELL = [
   "./index.html",
   "./manifest.json",
   "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./icons/icon-512.png",
+  "./lib/jspdf.umd.min.js",
+  "./lib/pdf.min.js",
+  "./lib/pdf.worker.min.js"
 ];
 
 self.addEventListener("install", (event) => {
