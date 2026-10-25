@@ -1,0 +1,1542 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Ausgaben</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#26292e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ausgaben">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+  :root{
+    --bg:#26292e;
+    --surface:#31353b;
+    --surface-2:#3b4047;
+    --border:#464c55;
+    --border-bright:#5a616c;
+    --text:#ffffff;
+    --text-dim:#c3c9d2;
+    --text-faint:#8f97a3;
+    --accent:#3b82f6;
+    --accent-bright:#7db1ff;
+    --accent-dim:#203a60;
+    --danger:#f0605d;
+    --danger-dim:#4a2a2b;
+    --warn:#f5b942;
+    --warn-dim:#4a3e22;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  button{font-family:inherit;}
+  .hidden{display:none !important;}
+  input[type=file]{display:none;}
+
+  #app{max-width:640px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top)) 16px calc(100px + env(safe-area-inset-bottom));}
+
+  /* ---------- Kopfzeile ---------- */
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px;min-height:42px;}
+  .topbar h1{font-size:22px;margin:0;font-weight:750;}
+  .topbar .sub{font-size:12px;color:var(--text-faint);margin-top:2px;}
+  .icon-round{width:42px;height:42px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .icon-round:active{background:var(--surface-2);}
+  .back-btn{background:none;border:none;color:var(--accent-bright);font-size:15px;font-weight:600;cursor:pointer;padding:8px 4px;}
+
+  /* ---------- Seite 1: Erfassen ---------- */
+  .scan-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;text-align:center;
+    min-height:calc(100vh - 230px);min-height:calc(100dvh - 230px);}
+  .scan-btn{width:210px;height:210px;border-radius:50%;border:none;cursor:pointer;color:#fff;
+    background:radial-gradient(circle at 32% 28%, #66a3ff, #2563eb 70%);
+    box-shadow:0 14px 44px rgba(37,99,235,.45), 0 0 0 12px rgba(59,130,246,.13);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+    font-size:17px;font-weight:700;transition:transform .12s;}
+  .scan-btn .ic{font-size:56px;line-height:1;}
+  .scan-btn:active{transform:scale(.96);}
+  .entry-btn{min-width:230px;padding:15px 22px;border-radius:30px;border:1.5px solid var(--accent);background:transparent;color:var(--text);font-size:15.5px;font-weight:650;cursor:pointer;}
+  .entry-btn:active{background:var(--accent-dim);}
+  .link-btn{background:none;border:none;color:var(--text-faint);font-size:13px;text-decoration:underline;cursor:pointer;padding:4px;}
+
+  .queue{width:100%;margin-top:6px;}
+  .queue-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;font-size:13px;flex-wrap:wrap;text-align:left;transition:opacity .4s;}
+  .queue-thumb{width:38px;height:38px;border-radius:7px;object-fit:cover;background:var(--surface-2);flex-shrink:0;}
+  .queue-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-dim);}
+  .queue-status{font-size:12.5px;white-space:nowrap;color:var(--text-dim);display:flex;align-items:center;gap:6px;}
+  .queue-status.ok{color:var(--accent-bright);}
+  .queue-status.err{color:var(--danger);}
+  .queue-error{flex-basis:100%;font-size:12px;line-height:1.45;color:#ffd3d2;background:var(--danger-dim);border-radius:8px;padding:8px 10px;}
+  .spinner{width:13px;height:13px;border-radius:50%;border:2px solid var(--border-bright);border-top-color:var(--accent);animation:spin .7s linear infinite;display:inline-block;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ---------- Seite 2: Monate ---------- */
+  .year-head{display:flex;justify-content:space-between;align-items:baseline;margin:22px 4px 10px;color:var(--text-dim);font-size:13px;font-weight:650;letter-spacing:.03em;}
+  .year-head:first-child{margin-top:4px;}
+  .month-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:15px 16px;margin-bottom:10px;cursor:pointer;}
+  .month-card:active{background:var(--surface-2);}
+  .month-card.current{border-color:var(--accent);}
+  .month-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .month-name{font-size:16.5px;font-weight:700;}
+  .month-count{font-size:12px;color:var(--text-faint);margin-top:3px;}
+  .month-sum{font-size:20px;font-weight:750;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .bar{display:flex;height:11px;border-radius:6px;overflow:hidden;background:var(--surface-2);margin-top:13px;}
+  .bar.big{height:18px;border-radius:9px;margin-top:16px;}
+  .bar span{display:block;height:100%;}
+  .bar span + span{box-shadow:inset 1.5px 0 0 var(--surface);}
+  .legend{display:flex;flex-wrap:wrap;gap:5px 13px;margin-top:10px;font-size:11.5px;color:var(--text-dim);}
+  .legend span{display:flex;align-items:center;}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;flex-shrink:0;}
+
+  /* ---------- Monatsdetail ---------- */
+  .month-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .month-title{font-size:19px;font-weight:750;text-align:center;}
+  .detail-total{font-size:34px;font-weight:800;text-align:center;margin-top:14px;font-variant-numeric:tabular-nums;}
+  .detail-count{text-align:center;font-size:12.5px;color:var(--text-faint);margin-top:2px;}
+  .cat-list{margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+  .cat-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--border);cursor:pointer;font-size:14px;}
+  .cat-row:first-child{border-top:none;}
+  .cat-row.active{background:var(--accent-dim);}
+  .cat-row .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cat-row .cnt{color:var(--text-faint);font-size:12px;}
+  .cat-row .pct{color:var(--text-faint);font-size:12px;width:40px;text-align:right;}
+  .cat-row .amt{font-weight:650;font-variant-numeric:tabular-nums;min-width:84px;text-align:right;}
+  .filter-info{font-size:12.5px;color:var(--accent-bright);margin:12px 4px 0;display:flex;justify-content:space-between;align-items:center;}
+  .day-head{font-size:11.5px;color:var(--text-faint);margin:18px 4px 7px;text-transform:uppercase;letter-spacing:.06em;font-weight:650;display:flex;justify-content:space-between;}
+  .entry{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:6px;cursor:pointer;}
+  .entry:active{background:var(--surface-2);}
+  .entry .info{flex:1;min-width:0;}
+  .entry .t{font-size:15px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .entry .m{font-size:12px;color:var(--text-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .entry .a{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:15px;}
+  .cat-ic{width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0;}
+  .badge{font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px;background:var(--warn-dim);color:var(--warn);font-weight:700;vertical-align:middle;}
+  .empty{color:var(--text-faint);font-size:14px;text-align:center;padding:36px 10px;line-height:1.5;}
+
+  /* ---------- Allgemein ---------- */
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  .btn{padding:12px 15px;border-radius:11px;border:1px solid var(--border-bright);background:var(--surface-2);color:var(--text);font-size:14px;font-weight:650;cursor:pointer;}
+  .btn:active{filter:brightness(1.15);}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn.danger{border-color:var(--danger);color:var(--danger);background:transparent;}
+  .btn.small{padding:8px 12px;font-size:13px;border-radius:9px;}
+  .btn.grow{flex:1;}
+  .btn:disabled{opacity:.5;cursor:default;}
+  .hint{font-size:12px;color:var(--text-faint);line-height:1.55;margin-top:8px;}
+
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px;}
+  .panel h3{margin:0 0 12px;font-size:15px;font-weight:700;}
+  .msg{font-size:12.5px;padding:9px 11px;border-radius:9px;margin-top:10px;line-height:1.45;background:var(--danger-dim);color:#ffd3d2;}
+  .msg.ok{background:var(--accent-dim);color:var(--accent-bright);}
+
+  .cat-set-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);}
+  .cat-set-row .input{flex:1;padding:9px 10px;font-size:15px;}
+  .cat-set-row .cnt{font-size:11.5px;color:var(--text-faint);white-space:nowrap;}
+  .color-in{width:38px;height:38px;border:none;border-radius:10px;padding:0;background:none;cursor:pointer;flex-shrink:0;}
+  .color-in::-webkit-color-swatch-wrapper{padding:0;}
+  .color-in::-webkit-color-swatch{border:none;border-radius:10px;}
+  .del-btn{background:none;border:none;color:var(--text-faint);font-size:17px;cursor:pointer;padding:6px;}
+  .del-btn:disabled{opacity:.3;}
+  .reassign{background:var(--bg);border:1px solid var(--danger-dim);border-radius:10px;padding:11px;margin:8px 0;font-size:13px;color:var(--text-dim);}
+  .reassign select{margin:8px 0;}
+  .add-row{display:flex;gap:8px;margin-top:12px;}
+  .add-row .input{flex:1;}
+
+  /* ---------- Formularfelder ---------- */
+  .field{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--text-dim);margin-bottom:12px;}
+  .input{width:100%;background:var(--bg);border:1px solid var(--border-bright);border-radius:10px;color:var(--text);font-size:16px;padding:12px;font-family:inherit;-webkit-appearance:none;appearance:none;}
+  select.input{background-image:linear-gradient(45deg,transparent 50%,var(--text-dim) 50%),linear-gradient(135deg,var(--text-dim) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:34px;}
+  .input:focus{outline:none;border-color:var(--accent);}
+  input[type=date].input{color-scheme:dark;min-height:46px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+  /* ---------- Eingabe-Blatt ---------- */
+  #sheetBg{position:fixed;inset:0;background:rgba(12,14,17,.62);z-index:60;display:flex;align-items:flex-end;justify-content:center;}
+  .sheet{width:100%;max-width:640px;max-height:92vh;max-height:92dvh;overflow-y:auto;background:var(--surface);border-radius:20px 20px 0 0;
+    padding:12px 16px calc(18px + env(safe-area-inset-bottom));border-top:1px solid var(--border-bright);animation:up .22s ease-out;}
+  @keyframes up{from{transform:translateY(40px);opacity:.4;}to{transform:none;opacity:1;}}
+  .sheet-grip{width:42px;height:4px;border-radius:2px;background:var(--border-bright);margin:0 auto 14px;}
+  .sheet h2{font-size:18px;margin:0 0 3px;}
+  .sheet .sub{font-size:12px;color:var(--text-faint);margin-bottom:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .thumbs{display:flex;gap:8px;overflow-x:auto;margin-bottom:14px;}
+  .thumbs:empty{display:none;}
+  .thumbs img{height:130px;border-radius:9px;border:1px solid var(--border-bright);cursor:zoom-in;flex-shrink:0;}
+  .note{font-size:12.5px;line-height:1.45;padding:9px 11px;border-radius:10px;margin-bottom:12px;background:var(--warn-dim);color:var(--warn);}
+  .note.err{background:var(--danger-dim);color:#ffd3d2;}
+  .note.info{background:var(--accent-dim);color:var(--accent-bright);}
+
+  /* ---------- Navigation unten ---------- */
+  .nav{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(38,41,46,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border-top:1px solid var(--border);padding:7px 0 calc(7px + env(safe-area-inset-bottom));}
+  .nav-inner{display:flex;max-width:640px;margin:0 auto;}
+  .nav button{flex:1;background:none;border:none;color:var(--text-faint);font-size:11.5px;font-weight:650;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px;cursor:pointer;}
+  .nav button .ic{font-size:22px;line-height:1;filter:grayscale(1);opacity:.75;}
+  .nav button.active{color:var(--accent-bright);}
+  .nav button.active .ic{filter:none;opacity:1;}
+
+  /* ---------- Vollbild, Hinweise ---------- */
+  #imgViewer{position:fixed;inset:0;background:rgba(15,17,20,.97);z-index:100;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);}
+  .viewer-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;background:var(--surface);}
+  #imgViewerContent{flex:1;overflow-y:auto;padding:14px;text-align:center;}
+  #imgViewerContent img{max-width:100%;border-radius:8px;margin-bottom:12px;}
+
+  #toast{position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(10px);background:var(--accent);color:#fff;
+    padding:11px 18px;border-radius:24px;font-size:14px;font-weight:650;z-index:90;box-shadow:0 8px 28px rgba(0,0,0,.4);opacity:0;transition:opacity .25s, transform .25s;pointer-events:none;max-width:90%;text-align:center;}
+  #toast.show{opacity:1;transform:translateX(-50%);}
+  #warnBanner{background:var(--danger-dim);border:1px solid var(--danger);color:#ffd3d2;font-size:12.5px;padding:10px 14px;border-radius:10px;margin-bottom:14px;}
+
+  #installBanner{display:none;position:fixed;left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.45);align-items:center;gap:10px;z-index:50;}
+  #installBanner .txt{flex:1;font-size:13px;}
+
+  /* ---------- Einrichtung ---------- */
+  #setupScreen{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 18px;}
+  .setup-box{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px 22px;}
+  .setup-box img{width:66px;height:66px;border-radius:16px;display:block;margin:0 auto 14px;}
+  .setup-box h1{font-size:22px;text-align:center;margin:0 0 4px;}
+  .setup-ver{text-align:center;font-size:11px;color:var(--text-faint);margin-bottom:18px;}
+</style>
+</head>
+<body>
+
+<!-- ================= Einrichtung ================= -->
+<div id="setupScreen" class="hidden">
+  <div class="setup-box">
+    <img src="icons/icon-192.png" alt="">
+    <h1>Ausgaben</h1>
+    <div class="setup-ver" id="verSetup"></div>
+    <div class="hint" style="margin:0 0 14px;">Einmalige Einrichtung: Trage deinen Anthropic-API-Key ein, damit die App Belege auslesen kann. Er wird <b style="color:var(--accent-bright)">nur auf diesem Gerät</b> gespeichert.</div>
+    <label class="field">Anthropic API-Key
+      <input class="input" id="setupKey" type="password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="sk-ant-...">
+    </label>
+    <div id="setupError" class="msg hidden"></div>
+    <button class="btn primary" id="setupSave" style="width:100%;margin-top:6px;">Loslegen</button>
+    <div class="hint" style="margin-top:14px;">Den Key erstellst du unter <b style="color:var(--accent-bright)">console.anthropic.com</b> → API Keys. Alle Ausgaben bleiben ausschließlich auf diesem Gerät.</div>
+    <button class="link-btn" id="setupSkip" style="display:block;margin:12px auto 0;">Ohne Key fortfahren</button>
+  </div>
+</div>
+
+<!-- ================= App ================= -->
+<div id="app" class="hidden">
+  <div id="warnBanner" class="hidden"></div>
+
+  <!-- Seite 1: Erfassen -->
+  <section id="viewScan">
+    <div class="topbar">
+      <div><h1>Ausgaben</h1><div class="sub">Beleg scannen oder Eintrag erstellen</div></div>
+      <button class="icon-round open-settings" title="Einstellungen">⚙</button>
+    </div>
+    <div class="scan-wrap">
+      <button class="scan-btn" id="scanBtn"><span class="ic">📷</span>Beleg scannen</button>
+      <button class="entry-btn" id="newEntryBtn">＋ Eintrag erstellen</button>
+      <button class="link-btn" id="galleryBtn">oder Foto / PDF aus Galerie & Dateien wählen</button>
+      <div class="queue" id="queue"></div>
+    </div>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment">
+    <input type="file" id="fileInput" accept="image/*,.pdf,application/pdf" multiple>
+  </section>
+
+  <!-- Seite 2: Monate -->
+  <section id="viewMonths" class="hidden">
+    <div class="topbar">
+      <div><h1>Übersicht</h1><div class="sub" id="monthsSub"></div></div>
+      <button class="icon-round open-settings" title="Einstellungen">⚙</button>
+    </div>
+    <div id="monthsList"></div>
+  </section>
+
+  <!-- Monatsdetail -->
+  <section id="viewDetail" class="hidden">
+    <div class="topbar">
+      <button class="back-btn" id="detailBack">‹ Übersicht</button>
+      <button class="icon-round open-settings" title="Einstellungen">⚙</button>
+    </div>
+    <div class="month-nav">
+      <button class="icon-round" id="prevMonth" title="Vormonat">‹</button>
+      <div class="month-title" id="detailTitle"></div>
+      <button class="icon-round" id="nextMonth" title="Folgemonat">›</button>
+    </div>
+    <div class="detail-total" id="detailTotal"></div>
+    <div class="detail-count" id="detailCount"></div>
+    <div id="detailBar"></div>
+    <div class="cat-list" id="detailCats"></div>
+    <div id="detailFilter"></div>
+    <div class="actions">
+      <button class="btn primary grow" id="pdfBtn">📄 Monats-PDF speichern</button>
+      <button class="btn grow" id="offloadBtn">🗑 Bilder entfernen</button>
+    </div>
+    <div class="hint" id="detailExportInfo"></div>
+    <div id="detailEntries"></div>
+  </section>
+
+  <!-- Einstellungen -->
+  <section id="viewSettings" class="hidden">
+    <div class="topbar">
+      <button class="back-btn" id="settingsBack">‹ Zurück</button>
+      <h1 style="font-size:18px;">Einstellungen</h1>
+      <span style="width:42px;"></span>
+    </div>
+
+    <div class="panel">
+      <h3>🏷 Kategorien</h3>
+      <div id="catSettings"></div>
+      <div class="add-row">
+        <input class="input" id="newCatInput" placeholder="Neue Kategorie, z. B. Haustiere">
+        <button class="btn primary" id="addCatBtn">＋</button>
+      </div>
+      <div class="hint">Farbe antippen zum Ändern. Neue Kategorien werden beim nächsten Scan automatisch mitberücksichtigt.</div>
+    </div>
+
+    <div class="panel">
+      <h3>🔑 Anthropic API-Key</h3>
+      <input class="input" id="apiKeyInput" type="password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="sk-ant-...">
+      <div id="apiMsg" class="msg hidden"></div>
+      <div class="actions">
+        <button class="btn small primary" id="saveKeyBtn">Speichern</button>
+        <button class="btn small" id="testKeyBtn">Verbindung testen</button>
+        <button class="btn small" id="clearKeyBtn">Entfernen</button>
+      </div>
+      <div class="hint">Wird nur auf diesem Gerät gespeichert und ausschließlich an api.anthropic.com gesendet.</div>
+    </div>
+
+    <div class="panel">
+      <h3>💾 Sicherung</h3>
+      <div class="hint" style="margin-top:0;">Alle Daten liegen nur auf diesem Gerät. Lade regelmäßig eine Sicherung herunter und lege sie in Dateien oder iCloud ab.</div>
+      <div class="actions">
+        <button class="btn small primary" id="backupBtn">⬇ Sicherung mit Bildern</button>
+        <button class="btn small" id="backupLightBtn">⬇ Nur Einträge</button>
+        <button class="btn small" id="restoreBtn">⬆ Sicherung einlesen</button>
+      </div>
+      <input type="file" id="restoreInput" accept="application/json,.json">
+      <div id="backupMsg" class="msg hidden"></div>
+      <div class="hint" id="storageInfo"></div>
+    </div>
+
+    <div class="hint" style="text-align:center;margin:18px 0;">📱 Diese App läuft vollständig auf deinem Gerät – kein Konto, kein Server. Beim Scannen wird nur das Belegbild an Anthropic übertragen.<br><span id="verApp"></span></div>
+  </section>
+</div>
+
+<!-- Navigation -->
+<nav class="nav hidden" id="nav">
+  <div class="nav-inner">
+    <button data-nav="scan" class="active"><span class="ic">📷</span>Erfassen</button>
+    <button data-nav="months"><span class="ic">📊</span>Übersicht</button>
+  </div>
+</nav>
+
+<!-- Eingabe-Blatt -->
+<div id="sheetBg" class="hidden"><div class="sheet" id="sheet"></div></div>
+
+<!-- Vollbild -->
+<div id="imgViewer" style="display:none;">
+  <div class="viewer-bar">
+    <span id="imgViewerTitle"></span>
+    <button class="icon-round" id="imgViewerClose" style="width:36px;height:36px;">✕</button>
+  </div>
+  <div id="imgViewerContent"></div>
+</div>
+
+<div id="toast"></div>
+
+<div id="installBanner">
+  <span class="txt"><b style="color:var(--accent-bright)">Als App installieren:</b> <span id="installTxt">Teilen → „Zum Home-Bildschirm"</span></span>
+  <button class="btn small primary hidden" id="installBtn">Installieren</button>
+  <button class="del-btn" id="dismissInstall">✕</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+const APP_VERSION = "v1";
+const AI_MODEL = "claude-sonnet-5";
+
+// Eigene Schluessel, damit sich die App nicht mit der Belegverwaltung
+// in die Quere kommt (beide laufen evtl. unter derselben github.io-Adresse).
+const KEY_LS = 'ausgaben_api_key';
+const SKIP_LS = 'ausgaben_setup_skipped';
+const OLD_KEY_LS = 'anthropic_api_key'; // Key der Belegverwaltung wird uebernommen, falls vorhanden
+
+const PALETTE = ['#3b82f6','#22d3ee','#a78bfa','#34d399','#f472b6','#fbbf24','#fb923c','#f87171','#2dd4bf','#c084fc','#facc15','#94a3b8'];
+const DEFAULT_CATEGORIES = [
+  {id:'lebensmittel', name:'Lebensmittel',        color:'#3b82f6'},
+  {id:'restaurant',   name:'Restaurant & Café',   color:'#22d3ee'},
+  {id:'mobilitaet',   name:'Mobilität & Tanken',  color:'#a78bfa'},
+  {id:'haushalt',     name:'Haushalt & Drogerie', color:'#34d399'},
+  {id:'gesundheit',   name:'Gesundheit',          color:'#f472b6'},
+  {id:'freizeit',     name:'Freizeit & Kultur',   color:'#fbbf24'},
+  {id:'kleidung',     name:'Kleidung',            color:'#fb923c'},
+  {id:'sonstiges',    name:'Sonstiges',           color:'#94a3b8'}
+];
+
+let categories = [];
+let entries = [];
+let pdfExports = {};          // Monat -> Zeitpunkt des letzten PDF-Exports
+let dataLoaded = false;
+let currentView = 'scan';
+let lastMainView = 'scan';
+let detailMonth = null;
+let detailFilter = null;
+let reassignTarget = null;
+const imgCache = {};
+
+// ---------- Hilfsfunktionen ----------
+const fmtEUR = n => (Number(n)||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad2 = n => String(n).padStart(2,'0');
+function todayISO(){ const d=new Date(); return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+const monthKey = iso => (iso||'').slice(0,7);
+function monthLabel(key){
+  const [y,m] = (key||'').split('-').map(Number);
+  if(!y || !m) return 'Ohne Datum';
+  const s = new Date(y, m-1, 1).toLocaleDateString('de-DE',{month:'long',year:'numeric'});
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function dateShort(iso){ const [y,m,d]=(iso||'').split('-'); return (y&&m&&d) ? `${d}.${m}.${y}` : '—'; }
+function dayLabel(iso){
+  const d = new Date(iso+'T12:00:00');
+  if(isNaN(d)) return iso || '—';
+  const t = todayISO();
+  if(iso === t) return 'Heute';
+  const g = new Date(); g.setDate(g.getDate()-1);
+  if(iso === g.getFullYear()+'-'+pad2(g.getMonth()+1)+'-'+pad2(g.getDate())) return 'Gestern';
+  return d.toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'});
+}
+function shiftMonth(key, delta){
+  let [y,m] = key.split('-').map(Number);
+  m += delta;
+  while(m<1){ m+=12; y--; }
+  while(m>12){ m-=12; y++; }
+  return y + '-' + pad2(m);
+}
+function isValidISO(s){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(s||'')) return false;
+  const d = new Date(s+'T12:00:00');
+  return !isNaN(d);
+}
+function normDate(s){
+  if(!s) return null;
+  s = String(s).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m){ const r = `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`; return isValidISO(r) ? r : null; }
+  m = s.match(/(\d{1,2})[.\/](\d{1,2})[.\/](\d{2,4})/);
+  if(m){ let y=m[3]; if(y.length===2) y='20'+y; const r = `${y}-${pad2(m[2])}-${pad2(m[1])}`; return isValidISO(r) ? r : null; }
+  return null;
+}
+function parseAmount(v){
+  if(typeof v === 'number') return v;
+  let s = String(v||'').replace(/[€\s]/g,'');
+  if(s.includes(',')) s = s.replace(/\./g,'').replace(',','.');
+  const n = parseFloat(s);
+  return isNaN(n) ? null : Math.round(n*100)/100;
+}
+function amountInput(v){ return (v===''||v==null||isNaN(Number(v))) ? '' : Number(v).toFixed(2).replace('.',','); }
+function newId(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+function catById(id){ return categories.find(c=>c.id===id) || {id, name:'Ohne Kategorie', color:'#6b7280'}; }
+function fallbackCatId(){
+  const s = categories.find(c=>/sonstig|verschied|andere|diverse/i.test(c.name));
+  return (s || categories[categories.length-1] || {}).id;
+}
+function textOn(hex){
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return (0.299*r + 0.587*g + 0.114*b) > 165 ? '#1d2025' : '#ffffff';
+}
+function hexToRgb(hex){
+  const h = /^#[0-9a-f]{6}$/i.test(hex) ? hex : '#94a3b8';
+  return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+}
+function addCategory(name){
+  const clean = String(name||'').trim();
+  if(!clean) return null;
+  const ex = categories.find(c=>c.name.toLowerCase()===clean.toLowerCase());
+  if(ex) return ex;
+  const color = PALETTE.find(p=>!categories.some(c=>c.color.toLowerCase()===p)) || PALETTE[categories.length % PALETTE.length];
+  const cat = { id:newId('k'), name:clean, color };
+  categories.push(cat);
+  return cat;
+}
+
+function toast(text){
+  const el = document.getElementById('toast');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>el.classList.remove('show'), 2600);
+}
+function showWarn(text){
+  const el = document.getElementById('warnBanner');
+  el.textContent = '⚠ ' + text;
+  el.classList.remove('hidden');
+}
+function showMsg(id, text, ok){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = text || '';
+  el.className = 'msg' + (ok ? ' ok' : '') + (text ? '' : ' hidden');
+}
+
+// ---------- IndexedDB ----------
+const DB_NAME = "ausgaben_db";
+const STORE = "kv";
+const dbPromise = new Promise((resolve)=>{
+  try{
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath:"key" });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(null);
+  }catch(e){ resolve(null); }
+});
+async function idbGet(key){
+  const db = await dbPromise; if(!db) return null;
+  return new Promise(res=>{
+    try{
+      const r = db.transaction(STORE,"readonly").objectStore(STORE).get(key);
+      r.onsuccess = () => res(r.result ? r.result.value : null);
+      r.onerror = () => res(null);
+    }catch(e){ res(null); }
+  });
+}
+async function idbSet(key, value){
+  const db = await dbPromise; if(!db) return false;
+  return new Promise(res=>{
+    try{
+      const tx = db.transaction(STORE,"readwrite");
+      tx.objectStore(STORE).put({ key, value });
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => res(false);
+      tx.onabort = () => res(false);
+    }catch(e){ res(false); }
+  });
+}
+async function idbDelete(key){
+  const db = await dbPromise; if(!db) return false;
+  return new Promise(res=>{
+    try{
+      const tx = db.transaction(STORE,"readwrite");
+      tx.objectStore(STORE).delete(key);
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => res(false);
+    }catch(e){ res(false); }
+  });
+}
+
+// ---------- Persistenz ----------
+// Es wird erst gespeichert, wenn alles geladen ist - sonst koennte eine
+// leere Liste vorhandene Daten ueberschreiben.
+async function loadData(){
+  const c = await idbGet('categories');
+  categories = (Array.isArray(c) && c.length) ? c : DEFAULT_CATEGORIES.map(x=>({...x}));
+  const e = await idbGet('entries');
+  entries = Array.isArray(e) ? e : [];
+  const p = await idbGet('pdfExports');
+  pdfExports = (p && typeof p === 'object') ? p : {};
+}
+async function saveCategories(){
+  if(!dataLoaded) return;
+  if(!(await idbSet('categories', categories))) showWarn('Kategorien konnten nicht gespeichert werden.');
+}
+async function saveEntries(){
+  if(!dataLoaded) return;
+  if(!(await idbSet('entries', entries))) showWarn('Speichern fehlgeschlagen – der Gerätespeicher ist möglicherweise voll. Bitte eine Sicherung erstellen und Bilder älterer Monate entfernen.');
+}
+async function saveImages(id, pages){
+  const ok = await idbSet('img_'+id, pages);
+  if(!ok){ showWarn('Das Belegbild konnte nicht gespeichert werden – Gerätespeicher voll? Der Eintrag selbst wurde gespeichert.'); return false; }
+  imgCache[id] = pages;
+  return true;
+}
+async function getImage(id){
+  if(imgCache[id]) return imgCache[id];
+  const res = await idbGet('img_'+id);
+  if(Array.isArray(res) && res.length){ imgCache[id] = res; return res; }
+  return null;
+}
+async function deleteImages(id){ await idbDelete('img_'+id); delete imgCache[id]; }
+
+async function requestPersistentStorage(){
+  try{
+    if(navigator.storage && navigator.storage.persist){
+      const schon = navigator.storage.persisted ? await navigator.storage.persisted() : false;
+      if(!schon) await navigator.storage.persist();
+    }
+  }catch(e){}
+}
+async function updateStorageInfo(){
+  const el = document.getElementById('storageInfo');
+  if(!el) return;
+  let t = '';
+  try{
+    if(navigator.storage && navigator.storage.estimate){
+      const est = await navigator.storage.estimate();
+      const mb = n => (n/1048576).toLocaleString('de-DE',{maximumFractionDigits:1}) + ' MB';
+      t = 'Belegt: ' + mb(est.usage||0);
+      if(est.quota) t += ' von ca. ' + mb(est.quota);
+    }
+    if(navigator.storage && navigator.storage.persisted){
+      t += (await navigator.storage.persisted()) ? ' · Speicher dauerhaft geschützt' : ' · Speicher nicht dauerhaft geschützt – Sicherung besonders wichtig';
+    }
+  }catch(e){}
+  const mitBild = entries.filter(e=>e.hatBild).length;
+  el.textContent = `${entries.length} Einträge, davon ${mitBild} mit Belegbild. ` + t;
+}
+
+// ---------- API-Key ----------
+function getApiKey(){
+  try{ return localStorage.getItem(KEY_LS) || localStorage.getItem(OLD_KEY_LS) || ''; }catch(e){ return ''; }
+}
+function setApiKey(k){ try{ localStorage.setItem(KEY_LS, k); }catch(e){} }
+function clearApiKey(){ try{ localStorage.removeItem(KEY_LS); }catch(e){} }
+const hasApiKey = () => !!getApiKey();
+let setupSkipped = false;
+try{ setupSkipped = localStorage.getItem(SKIP_LS) === '1'; }catch(e){}
+
+function updateGate(){
+  const show = hasApiKey() || setupSkipped;
+  document.getElementById('setupScreen').classList.toggle('hidden', show);
+  document.getElementById('app').classList.toggle('hidden', !show);
+  document.getElementById('nav').classList.toggle('hidden', !show);
+}
+
+// ---------- Ansichten ----------
+function showView(name){
+  currentView = name;
+  if(name==='scan' || name==='months') lastMainView = name;
+  ['scan','months','detail','settings'].forEach(v=>{
+    document.getElementById('view'+v.charAt(0).toUpperCase()+v.slice(1)).classList.toggle('hidden', v!==name);
+  });
+  const navKey = (name==='detail') ? 'months' : name;
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active', b.dataset.nav===navKey));
+  if(name==='months') renderMonths();
+  if(name==='detail') renderDetail();
+  if(name==='settings'){
+    document.getElementById('apiKeyInput').value = getApiKey();
+    showMsg('apiMsg',''); showMsg('backupMsg','');
+    reassignTarget = null;
+    renderCatSettings();
+    updateStorageInfo();
+  }
+  window.scrollTo(0,0);
+}
+
+function renderAll(){
+  if(currentView==='months') renderMonths();
+  if(currentView==='detail') renderDetail();
+  if(currentView==='settings') renderCatSettings();
+}
+
+// ---------- Statistik ----------
+function monthStats(key){
+  const list = entries.filter(e=>monthKey(e.datum)===key);
+  const total = list.reduce((s,e)=>s+(Number(e.betrag)||0),0);
+  const map = {}, cnt = {};
+  list.forEach(e=>{ map[e.kategorie]=(map[e.kategorie]||0)+(Number(e.betrag)||0); cnt[e.kategorie]=(cnt[e.kategorie]||0)+1; });
+  const byCat = Object.keys(map).map(id=>({cat:catById(id), sum:map[id], count:cnt[id]}))
+    .sort((a,b)=>b.sum-a.sum);
+  return { list, total, byCat };
+}
+function barHtml(byCat, total, big){
+  const cls = 'bar' + (big ? ' big' : '');
+  const pos = byCat.filter(x=>x.sum>0);
+  const sumPos = pos.reduce((s,x)=>s+x.sum,0);
+  if(!(sumPos>0)) return `<div class="${cls}"></div>`;
+  return `<div class="${cls}">` + pos.map(x=>
+    `<span style="width:${(x.sum/sumPos*100).toFixed(2)}%;background:${esc(x.cat.color)}" title="${esc(x.cat.name)}"></span>`
+  ).join('') + `</div>`;
+}
+
+// ---------- Seite 2: Monatsliste ----------
+function renderMonths(){
+  const box = document.getElementById('monthsList');
+  const keys = new Set(entries.map(e=>monthKey(e.datum)).filter(Boolean));
+  const cur = monthKey(todayISO());
+  keys.add(cur);
+  const sorted = [...keys].sort().reverse();
+
+  const jahr = cur.slice(0,4);
+  const jahresSumme = entries.filter(e=>(e.datum||'').startsWith(jahr)).reduce((s,e)=>s+(Number(e.betrag)||0),0);
+  document.getElementById('monthsSub').textContent = `${jahr} bisher: ${fmtEUR(jahresSumme)}`;
+
+  let html = '', lastYear = null;
+  for(const key of sorted){
+    const y = key.slice(0,4);
+    if(y !== lastYear){
+      const ys = entries.filter(e=>(e.datum||'').startsWith(y)).reduce((s,e)=>s+(Number(e.betrag)||0),0);
+      html += `<div class="year-head"><span>${esc(y)}</span><span>${fmtEUR(ys)}</span></div>`;
+      lastYear = y;
+    }
+    const st = monthStats(key);
+    const legend = st.byCat.filter(x=>x.sum>0).slice(0,4).map(x=>
+      `<span><i class="dot" style="background:${esc(x.cat.color)}"></i>${esc(x.cat.name)}</span>`).join('')
+      + (st.byCat.length>4 ? `<span>+${st.byCat.length-4}</span>` : '');
+    html += `<div class="month-card${key===cur?' current':''}" data-month="${esc(key)}">
+      <div class="month-row">
+        <div>
+          <div class="month-name">${esc(monthLabel(key))}</div>
+          <div class="month-count">${st.list.length} ${st.list.length===1?'Eintrag':'Einträge'}${key===cur?' · laufender Monat':''}</div>
+        </div>
+        <div class="month-sum">${fmtEUR(st.total)}</div>
+      </div>
+      ${barHtml(st.byCat, st.total)}
+      ${legend ? `<div class="legend">${legend}</div>` : ''}
+    </div>`;
+  }
+  if(!entries.length){
+    html += `<div class="empty">Noch keine Ausgaben erfasst.<br>Scanne deinen ersten Beleg auf der Seite „Erfassen".</div>`;
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('.month-card').forEach(c=>c.addEventListener('click', ()=>{
+    detailMonth = c.dataset.month; detailFilter = null; showView('detail');
+  }));
+}
+
+// ---------- Monatsdetail ----------
+function renderDetail(){
+  if(!detailMonth) detailMonth = monthKey(todayISO());
+  const st = monthStats(detailMonth);
+  document.getElementById('detailTitle').textContent = monthLabel(detailMonth);
+  document.getElementById('detailTotal').textContent = fmtEUR(st.total);
+  document.getElementById('detailCount').textContent = `${st.list.length} ${st.list.length===1?'Eintrag':'Einträge'}`;
+  document.getElementById('detailBar').innerHTML = barHtml(st.byCat, st.total, true);
+
+  const catsEl = document.getElementById('detailCats');
+  catsEl.classList.toggle('hidden', !st.byCat.length);
+  catsEl.innerHTML = st.byCat.map(x=>{
+    const pct = st.total>0 ? Math.round(x.sum/st.total*100) : 0;
+    return `<div class="cat-row${detailFilter===x.cat.id?' active':''}" data-cat="${esc(x.cat.id)}">
+      <i class="dot" style="background:${esc(x.cat.color)};width:11px;height:11px;"></i>
+      <span class="name">${esc(x.cat.name)}</span>
+      <span class="cnt">${x.count}×</span>
+      <span class="pct">${pct} %</span>
+      <span class="amt">${fmtEUR(x.sum)}</span>
+    </div>`;
+  }).join('');
+  catsEl.querySelectorAll('.cat-row').forEach(r=>r.addEventListener('click', ()=>{
+    detailFilter = (detailFilter===r.dataset.cat) ? null : r.dataset.cat;
+    renderDetail();
+  }));
+
+  const fEl = document.getElementById('detailFilter');
+  if(detailFilter){
+    fEl.innerHTML = `<div class="filter-info"><span>Gefiltert: ${esc(catById(detailFilter).name)}</span><button class="link-btn" id="clearFilter">alle zeigen</button></div>`;
+    document.getElementById('clearFilter').addEventListener('click', ()=>{ detailFilter=null; renderDetail(); });
+  } else fEl.innerHTML = '';
+
+  const mitBild = st.list.filter(e=>e.hatBild).length;
+  document.getElementById('pdfBtn').disabled = !st.list.length;
+  const off = document.getElementById('offloadBtn');
+  off.disabled = !mitBild;
+  const exp = pdfExports[detailMonth];
+  let info = '';
+  if(st.list.length){
+    info = exp ? `Monats-PDF zuletzt gespeichert am ${new Date(exp).toLocaleDateString('de-DE')}. ` : 'Monats-PDF wurde noch nicht gespeichert. ';
+    info += mitBild ? `${mitBild} Belegbild(er) liegen auf dem Gerät.` : 'Keine Belegbilder mehr auf dem Gerät.';
+  }
+  document.getElementById('detailExportInfo').textContent = info;
+
+  const shown = (detailFilter ? st.list.filter(e=>e.kategorie===detailFilter) : st.list)
+    .sort((a,b)=> (b.datum||'').localeCompare(a.datum||'') || (b.erstellt||'').localeCompare(a.erstellt||''));
+
+  const listEl = document.getElementById('detailEntries');
+  if(!shown.length){
+    listEl.innerHTML = `<div class="empty">Keine Einträge in diesem Monat.</div>`;
+    return;
+  }
+  let html = '', lastDay = null;
+  const daySums = {};
+  shown.forEach(e=>{ daySums[e.datum]=(daySums[e.datum]||0)+(Number(e.betrag)||0); });
+  for(const e of shown){
+    if(e.datum !== lastDay){
+      html += `<div class="day-head"><span>${esc(dayLabel(e.datum))}</span><span>${fmtEUR(daySums[e.datum])}</span></div>`;
+      lastDay = e.datum;
+    }
+    const c = catById(e.kategorie);
+    const meta = [c.name, e.notiz].filter(Boolean).join(' · ');
+    const fremd = (e.waehrung && e.waehrung!=='EUR' && e.betragOriginal!=null) ? ` · ${amountInput(e.betragOriginal)} ${e.waehrung}` : '';
+    html += `<div class="entry" data-id="${esc(e.id)}">
+      <div class="cat-ic" style="background:${esc(c.color)};color:${textOn(c.color)}">${esc((c.name||'?').charAt(0).toUpperCase())}</div>
+      <div class="info">
+        <div class="t">${esc(e.haendler||'Ohne Bezeichnung')}${e.unsicher?'<span class="badge">prüfen</span>':''}</div>
+        <div class="m">${e.hatBild?'📎 ':''}${esc(meta)}${esc(fremd)}</div>
+      </div>
+      <div class="a">${fmtEUR(e.betrag)}</div>
+    </div>`;
+  }
+  listEl.innerHTML = html;
+  listEl.querySelectorAll('.entry').forEach(el=>el.addEventListener('click', ()=>{
+    const e = entries.find(x=>x.id===el.dataset.id);
+    if(e) openSheet({ mode:'edit', rec:{...e} });
+  }));
+}
+
+// ---------- Bilder verarbeiten ----------
+function fileToCompressedJpeg(file, maxW=1000, quality=0.7){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ev=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w = img.width, h = img.height;
+        if(w > maxW){ h = Math.round(h*maxW/w); w = maxW; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
+      };
+      img.onerror = () => reject(new Error('Bild konnte nicht geöffnet werden'));
+      img.src = ev.target.result;
+    };
+    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden'));
+    reader.readAsDataURL(file);
+  });
+}
+
+if(window.pdfjsLib){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
+const MAX_PDF_PAGES = 6;
+async function pdfToJpegs(file, maxW=1100, quality=0.72){
+  if(!window.pdfjsLib) throw new Error('PDF-Leser konnte nicht geladen werden (Internet?)');
+  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const n = Math.min(pdf.numPages, MAX_PDF_PAGES);
+  const images = [];
+  for(let i=1;i<=n;i++){
+    const page = await pdf.getPage(i);
+    const base = page.getViewport({ scale:1 });
+    const vp = page.getViewport({ scale: Math.min(2.5, maxW/base.width) });
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width; canvas.height = vp.height;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    images.push(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
+  }
+  return { images, pageCount: pdf.numPages, truncated: pdf.numPages > MAX_PDF_PAGES };
+}
+const isPdf = f => f.type === 'application/pdf' || (f.name||'').toLowerCase().endsWith('.pdf');
+
+// Fingerabdruck der Originaldatei - erkennt doppelt hochgeladene Belege
+async function fileHash(file){
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let h1 = 0xdeadbeef ^ buf.length, h2 = 0x41c6ce57 ^ buf.length;
+  for(let i=0;i<buf.length;i++){
+    h1 = Math.imul(h1 ^ buf[i], 2654435761);
+    h2 = Math.imul(h2 ^ buf[i], 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1>>>16), 2246822507) ^ Math.imul(h2 ^ (h2>>>13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2>>>16), 2246822507) ^ Math.imul(h1 ^ (h1>>>13), 3266489909);
+  return (4294967296*(2097151 & h2) + (h1>>>0)).toString(36);
+}
+
+// ---------- Auslesen ueber die Anthropic-API ----------
+function buildPrompt(){
+  const catList = categories.map(c=>`"${c.name}"`).join(' | ');
+  return `Du bekommst ein oder mehrere Fotos/Seiten EINES Kassenbons, einer Quittung oder einer Rechnung aus dem privaten Alltag. Werte alle Seiten gemeinsam als ein Dokument aus – der Gesamtbetrag steht oft am Ende.
+Heute ist der ${dateShort(todayISO())}. Ist auf dem Beleg kein Jahr erkennbar, nimm das wahrscheinlichste (meist das aktuelle).
+
+Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Erklärung und ohne Markdown:
+{"datum":"JJJJ-MM-TT","haendler":"Name des Geschäfts oder Anbieters","betrag_original":12.34,"waehrung_original":"EUR","kurs_zu_eur":1.0,"betrag_eur":12.34,"kategorie":"...","beschreibung":"2–4 Wörter, was gekauft wurde","unsicher":false,"hinweis":""}
+
+Regeln:
+- "betrag_original" ist der tatsächlich bezahlte Gesamtbetrag (inkl. MwSt., nach Rabatten) – nicht Zwischensumme, nicht gegebenes Bargeld, nicht Rückgeld.
+- "kategorie" MUSS exakt einer dieser Werte sein: ${catList}
+  Entscheide nach dem Inhalt des Einkaufs, nicht nur nach dem Namen des Geschäfts. Passt nichts, nimm die Kategorie für Sonstiges bzw. die letzte der Liste.
+- Bei EUR: kurs_zu_eur = 1.0 und betrag_eur = betrag_original. Andere Währung: Kurs schätzen, betrag_eur auf 2 Nachkommastellen berechnen, hinweis = "Wechselkurs geschätzt, bitte prüfen".
+- Unlesbare Felder auf null setzen, "unsicher": true und den Grund kurz im hinweis nennen.`;
+}
+
+async function callApi(body){
+  return fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "x-api-key": getApiKey(),
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true"
+    },
+    body: JSON.stringify(body)
+  });
+}
+
+async function extractReceipt(images){
+  if(!hasApiKey()) throw new Error('Kein API-Key hinterlegt');
+  let res;
+  try{
+    res = await callApi({
+      model: AI_MODEL,
+      max_tokens: 800,
+      messages:[{ role:"user", content:[
+        ...images.map(b64=>({ type:"image", source:{ type:"base64", media_type:"image/jpeg", data:b64 }})),
+        { type:"text", text: buildPrompt() }
+      ]}]
+    });
+  }catch(e){
+    throw new Error('Keine Verbindung zu api.anthropic.com – Internet prüfen.');
+  }
+  if(!res.ok){
+    let grund = 'Fehler ' + res.status;
+    try{
+      const err = await res.json();
+      const m = (err.error && err.error.message) || '';
+      if(res.status===401) grund = 'API-Key ungültig – bitte in den Einstellungen prüfen.';
+      else if(res.status===429) grund = 'Zu viele Anfragen oder Guthaben aufgebraucht. Später erneut versuchen.';
+      else if(res.status===400 && /credit|balance/i.test(m)) grund = 'Kein Guthaben mehr auf dem Anthropic-Konto.';
+      else if(m) grund += ': ' + m.slice(0,140);
+    }catch(e){}
+    throw new Error(grund);
+  }
+  const data = await res.json();
+  const tb = (data.content||[]).find(b=>b.type==='text');
+  if(!tb) throw new Error('Keine verwertbare Antwort erhalten');
+  const t = String(tb.text);
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if(a<0 || b<=a) throw new Error('Antwort konnte nicht gelesen werden');
+  try{ return JSON.parse(t.slice(a, b+1)); }
+  catch(e){ throw new Error('Antwort konnte nicht gelesen werden'); }
+}
+
+// ---------- Scannen ----------
+const reviewQueue = [];
+let sheet = null;
+
+async function handleFiles(fileList){
+  if(!hasApiKey()){
+    toast('Bitte zuerst den API-Key eintragen');
+    showView('settings');
+    document.getElementById('apiKeyInput').focus();
+    return;
+  }
+  const files = Array.from(fileList||[]).filter(f=>(f.type||'').startsWith('image/') || isPdf(f));
+  for(const f of files) await processFile(f);
+}
+
+async function processFile(file){
+  const queue = document.getElementById('queue');
+  const row = document.createElement('div');
+  row.className = 'queue-item';
+  row.innerHTML = `<img class="queue-thumb" alt=""><span class="queue-name">${esc(file.name||'Foto')}</span><span class="queue-status"><span class="spinner"></span> wird gelesen…</span>`;
+  queue.prepend(row);
+  const setStatus = (html, cls) => { const s = row.querySelector('.queue-status'); s.className = 'queue-status ' + (cls||''); s.innerHTML = html; };
+
+  try{
+    const hash = await fileHash(file);
+    let images, pageCount = 1, truncated = false;
+    if(isPdf(file)){
+      const r = await pdfToJpegs(file);
+      images = r.images; pageCount = r.pageCount; truncated = r.truncated;
+    } else {
+      images = [await fileToCompressedJpeg(file)];
+    }
+    row.querySelector('.queue-thumb').src = 'data:image/jpeg;base64,' + images[0];
+
+    const x = await extractReceipt(images);
+    const datum = normDate(x.datum);
+    const katName = String(x.kategorie||'').trim().toLowerCase();
+    const cat = categories.find(c=>c.name.toLowerCase()===katName);
+    const hinweise = [];
+    if(x.hinweis) hinweise.push(x.hinweis);
+    if(!datum) hinweise.push('Datum nicht erkannt – auf heute gesetzt.');
+    if(truncated) hinweise.push(`Dokument hat ${pageCount} Seiten, nur die ersten ${MAX_PDF_PAGES} wurden gelesen.`);
+    const betrag = parseAmount(x.betrag_eur ?? x.betrag_original);
+    if(betrag == null) hinweise.push('Betrag nicht erkannt.');
+
+    const rec = {
+      id: newId('e'),
+      datum: datum || todayISO(),
+      haendler: x.haendler || '',
+      notiz: x.beschreibung || '',
+      betrag: betrag ?? '',
+      betragOriginal: x.betrag_original ?? null,
+      waehrung: (x.waehrung_original || 'EUR').toUpperCase(),
+      kurs: x.kurs_zu_eur ?? 1,
+      kategorie: cat ? cat.id : fallbackCatId(),
+      unsicher: !!x.unsicher || !datum || betrag==null || truncated,
+      hinweis: hinweise.join(' '),
+      hash
+    };
+    setStatus('✓ gelesen' + (pageCount>1 ? ` · ${Math.min(pageCount,MAX_PDF_PAGES)} Seiten` : ''), 'ok');
+    setTimeout(()=>{ row.style.opacity = '0'; setTimeout(()=>row.remove(), 450); }, 2500);
+
+    reviewQueue.push({ rec, images, filename: file.name || 'Foto' });
+    showNextReview();
+  }catch(err){
+    console.error(err);
+    setStatus('✕ Fehler <button class="del-btn" style="font-size:14px;padding:0 0 0 6px;">✕</button>', 'err');
+    row.querySelector('.queue-status .del-btn').addEventListener('click', ()=>row.remove());
+    const d = document.createElement('div');
+    d.className = 'queue-error';
+    d.textContent = err.message || 'Unbekannter Fehler';
+    row.appendChild(d);
+  }
+}
+
+function findDuplicate(rec){
+  return entries.find(e=> e.id!==rec.id && (
+    (rec.hash && e.hash === rec.hash) ||
+    (e.datum===rec.datum && Number(rec.betrag)>0 && Math.abs((Number(e.betrag)||0)-Number(rec.betrag))<0.005)
+  ));
+}
+
+// ---------- Eingabe-Blatt (Pruefen / Neu / Bearbeiten) ----------
+function showNextReview(){
+  if(sheet) return;
+  const next = reviewQueue.shift();
+  if(next) openSheet({ mode:'review', ...next });
+}
+
+function catOptions(sel){
+  return categories.map(c=>`<option value="${esc(c.id)}" ${c.id===sel?'selected':''}>${esc(c.name)}</option>`).join('')
+    + `<option value="__neu__">＋ Neue Kategorie…</option>`;
+}
+
+function openSheet(s){
+  sheet = s;
+  const rec = s.rec;
+  const titles = { review:'Beleg prüfen', edit:'Eintrag bearbeiten', new:'Neuer Eintrag' };
+  let sub = '';
+  if(s.mode==='review') sub = esc(s.filename) + (reviewQueue.length ? ` · noch ${reviewQueue.length} weitere` : '');
+  if(s.mode==='edit') sub = 'Abgelegt in ' + esc(monthLabel(monthKey(rec.datum)));
+
+  let notes = '';
+  if(s.mode==='review'){
+    const dup = findDuplicate(rec);
+    if(dup){
+      const gleich = rec.hash && dup.hash === rec.hash;
+      notes += `<div class="note err">${gleich ? 'Dieser Beleg wurde bereits erfasst' : 'Möglicherweise doppelt – gleicher Betrag am gleichen Tag'}: ${esc(dup.haendler)} · ${dateShort(dup.datum)} · ${fmtEUR(dup.betrag)}</div>`;
+    }
+    if(rec.unsicher || rec.hinweis) notes += `<div class="note">⚠ ${esc(rec.hinweis || 'Einzelne Angaben konnten nicht sicher gelesen werden – bitte prüfen.')}</div>`;
+  }
+  if(s.mode==='edit' && rec.bildAusgelagert) notes += `<div class="note info">Das Belegbild wurde vom Gerät entfernt und ist im Monats-PDF enthalten.</div>`;
+  if(s.mode==='edit' && rec.unsicher && rec.hinweis) notes += `<div class="note">⚠ ${esc(rec.hinweis)}</div>`;
+
+  const orig = (rec.waehrung && rec.waehrung!=='EUR' && rec.betragOriginal!=null)
+    ? `<div class="hint" style="margin:-4px 0 12px;">Original: ${amountInput(rec.betragOriginal)} ${esc(rec.waehrung)} · Kurs ${esc(rec.kurs)}</div>` : '';
+
+  let buttons = '';
+  if(s.mode==='review') buttons = `<button class="btn primary grow" id="sSave">✔ Speichern</button><button class="btn" id="sCancel">Verwerfen</button>`;
+  if(s.mode==='new')    buttons = `<button class="btn primary grow" id="sSave">✔ Speichern</button><button class="btn" id="sCancel">Abbrechen</button>`;
+  if(s.mode==='edit')   buttons = `<button class="btn primary grow" id="sSave">✔ Speichern</button><button class="btn" id="sCancel">Abbrechen</button><button class="btn danger" id="sDelete">🗑</button>`;
+
+  const el = document.getElementById('sheet');
+  el.innerHTML = `
+    <div class="sheet-grip"></div>
+    <h2>${titles[s.mode]}</h2>
+    <div class="sub">${sub || '&nbsp;'}</div>
+    <div class="thumbs" id="sThumbs"></div>
+    ${notes}
+    <label class="field">Geschäft / Beschreibung
+      <input class="input" id="fHaendler" value="${esc(rec.haendler)}" placeholder="z. B. Supermarkt" autocomplete="off">
+    </label>
+    <div class="grid2">
+      <label class="field">Betrag (€)
+        <input class="input" id="fBetrag" inputmode="decimal" value="${amountInput(rec.betrag)}" placeholder="0,00" autocomplete="off">
+      </label>
+      <label class="field">Datum
+        <input class="input" type="date" id="fDatum" value="${esc(rec.datum)}">
+      </label>
+    </div>
+    ${orig}
+    <label class="field">Kategorie
+      <select class="input" id="fKat">${catOptions(rec.kategorie)}</select>
+    </label>
+    <label class="field">Notiz
+      <input class="input" id="fNotiz" value="${esc(rec.notiz)}" placeholder="optional" autocomplete="off">
+    </label>
+    <div class="actions">${buttons}</div>`;
+
+  document.getElementById('sheetBg').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  el.scrollTop = 0;
+
+  // Vorschaubilder
+  const thumbs = document.getElementById('sThumbs');
+  const showThumbs = pages => {
+    thumbs.innerHTML = pages.map((p,i)=>`<img src="data:image/jpeg;base64,${p}" data-i="${i}" alt="">`).join('');
+    thumbs.querySelectorAll('img').forEach(im=>im.addEventListener('click', ()=>openViewer(pages, rec.haendler || 'Beleg')));
+  };
+  if(s.images && s.images.length) showThumbs(s.images);
+  else if(s.mode==='edit' && rec.hatBild) getImage(rec.id).then(p=>{ if(p && sheet && sheet.rec.id===rec.id) showThumbs(p); });
+
+  // Neue Kategorie direkt hier anlegen
+  const kat = document.getElementById('fKat');
+  let prevKat = kat.value;
+  kat.addEventListener('change', async ()=>{
+    if(kat.value !== '__neu__'){ prevKat = kat.value; return; }
+    const name = prompt('Name der neuen Kategorie:');
+    const cat = name ? addCategory(name) : null;
+    if(cat){
+      await saveCategories();
+      kat.innerHTML = catOptions(cat.id);
+      prevKat = cat.id;
+    } else kat.value = prevKat;
+  });
+
+  document.getElementById('sSave').addEventListener('click', saveSheet);
+  document.getElementById('sCancel').addEventListener('click', closeSheet);
+  const del = document.getElementById('sDelete');
+  if(del) del.addEventListener('click', deleteFromSheet);
+}
+
+function closeSheet(){
+  sheet = null;
+  document.getElementById('sheetBg').classList.add('hidden');
+  document.getElementById('sheet').innerHTML = '';
+  document.body.style.overflow = '';
+  showNextReview();
+}
+
+function readSheet(){
+  const datum = document.getElementById('fDatum').value;
+  const betrag = parseAmount(document.getElementById('fBetrag').value);
+  if(!isValidISO(datum)){ alert('Bitte ein gültiges Datum wählen.'); return null; }
+  if(betrag == null){ alert('Bitte einen Betrag eintragen.'); return null; }
+  let kategorie = document.getElementById('fKat').value;
+  if(kategorie === '__neu__') kategorie = fallbackCatId();
+  return {
+    datum, betrag, kategorie,
+    haendler: document.getElementById('fHaendler').value.trim() || 'Ohne Bezeichnung',
+    notiz: document.getElementById('fNotiz').value.trim()
+  };
+}
+
+async function saveSheet(){
+  if(!sheet) return;
+  const f = readSheet();
+  if(!f) return;
+  const btn = document.getElementById('sSave');
+  btn.disabled = true; btn.textContent = 'Wird gespeichert…';
+
+  const s = sheet;
+  if(s.mode === 'edit'){
+    const e = entries.find(x=>x.id===s.rec.id);
+    if(e){ Object.assign(e, f); e.unsicher = false; }
+  } else {
+    const rec = { ...s.rec, ...f, unsicher:false, erstellt: new Date().toISOString(), hatBild:false };
+    if(s.images && s.images.length){
+      rec.seiten = s.images.length;
+      rec.hatBild = await saveImages(rec.id, s.images);
+    }
+    entries.push(rec);
+  }
+  await saveEntries();
+  toast((s.mode==='edit' ? 'Geändert' : 'Gespeichert') + ' · ' + monthLabel(monthKey(f.datum)));
+  closeSheet();
+  renderAll();
+}
+
+async function deleteFromSheet(){
+  if(!sheet || !confirm('Diesen Eintrag wirklich löschen?')) return;
+  const id = sheet.rec.id;
+  entries = entries.filter(e=>e.id!==id);
+  await saveEntries();
+  await deleteImages(id);
+  toast('Eintrag gelöscht');
+  closeSheet();
+  renderAll();
+}
+
+// ---------- Vollbild ----------
+function openViewer(pages, title){
+  document.getElementById('imgViewerTitle').textContent = title || 'Beleg';
+  document.getElementById('imgViewerContent').innerHTML = pages.map(p=>`<img src="data:image/jpeg;base64,${p}" alt="">`).join('');
+  document.getElementById('imgViewer').style.display = 'flex';
+}
+function closeViewer(){
+  document.getElementById('imgViewer').style.display = 'none';
+  document.getElementById('imgViewerContent').innerHTML = '';
+}
+
+// ---------- Monats-PDF ----------
+async function buildMonthPdf(key){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const st = monthStats(key);
+  const label = monthLabel(key);
+  const list = [...st.list].sort((a,b)=>(a.datum||'').localeCompare(b.datum||'') || (a.erstellt||'').localeCompare(b.erstellt||''));
+  const cut = (t,n) => { t = String(t||''); return t.length>n ? t.slice(0,n-1)+'…' : t; };
+  const BLUE = [37,99,235];
+
+  // Deckblatt
+  doc.setFillColor(...BLUE); doc.rect(0,0,210,32,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(19);
+  doc.text('Ausgaben ' + label, 14, 15);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
+  doc.text(`${list.length} Einträge · Summe ${fmtEUR(st.total)}`, 14, 24);
+  doc.setTextColor(30,30,30);
+
+  // Balken
+  let y = 42;
+  const pos = st.byCat.filter(x=>x.sum>0);
+  const sumPos = pos.reduce((s,x)=>s+x.sum,0);
+  if(sumPos>0){
+    let x = 14;
+    pos.forEach(c=>{ const w = c.sum/sumPos*182; doc.setFillColor(...hexToRgb(c.cat.color)); doc.rect(x,y,w,8,'F'); x += w; });
+  }
+  y += 18;
+
+  // Kategorien
+  doc.setFontSize(9.5); doc.setFont('helvetica','bold');
+  doc.text('Kategorie', 22, y); doc.text('Anzahl', 130, y, {align:'right'}); doc.text('Anteil', 158, y, {align:'right'}); doc.text('Betrag', 196, y, {align:'right'});
+  doc.setDrawColor(190,190,190); doc.line(14, y+2, 196, y+2);
+  y += 8; doc.setFont('helvetica','normal');
+  st.byCat.forEach(c=>{
+    doc.setFillColor(...hexToRgb(c.cat.color)); doc.rect(14, y-3.2, 4, 4, 'F');
+    doc.text(cut(c.cat.name,50), 22, y);
+    doc.text(String(c.count), 130, y, {align:'right'});
+    doc.text((st.total>0 ? Math.round(c.sum/st.total*100) : 0) + ' %', 158, y, {align:'right'});
+    doc.text(fmtEUR(c.sum), 196, y, {align:'right'});
+    y += 6.5;
+  });
+  doc.line(14, y-2.5, 196, y-2.5);
+  y += 3;
+  doc.setFont('helvetica','bold');
+  doc.text('Gesamt', 22, y); doc.text(fmtEUR(st.total), 196, y, {align:'right'});
+  doc.setFont('helvetica','normal');
+  y += 14;
+
+  // Einzelposten
+  const kopf = ()=>{
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    doc.text('Nr.', 20, y, {align:'right'}); doc.text('Datum', 23, y); doc.text('Geschäft', 45, y);
+    doc.text('Kategorie', 112, y); doc.text('Beleg', 160, y); doc.text('Betrag', 196, y, {align:'right'});
+    doc.setDrawColor(190,190,190); doc.line(14, y+1.8, 196, y+1.8);
+    doc.setFont('helvetica','normal'); y += 6.5;
+  };
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text('Einzelposten', 14, y); y += 8;
+  kopf();
+  list.forEach((r,i)=>{
+    if(y > 282){ doc.addPage(); y = 18; kopf(); }
+    doc.setFontSize(8.5);
+    doc.text(String(i+1), 20, y, {align:'right'});
+    doc.text(dateShort(r.datum), 23, y);
+    doc.text(cut(r.haendler + (r.notiz ? ' – '+r.notiz : ''), 42), 45, y);
+    doc.text(cut(catById(r.kategorie).name, 26), 112, y);
+    doc.text(r.hatBild ? 'ja' : (r.bildAusgelagert ? 'früheres PDF' : '—'), 160, y);
+    doc.text(fmtEUR(r.betrag), 196, y, {align:'right'});
+    y += 5.6;
+  });
+
+  // Belegbilder: zwei pro Seite nebeneinander, gleiche Nummerierung
+  const slots = [];
+  for(let i=0;i<list.length;i++){
+    const r = list[i];
+    if(!r.hatBild) continue;
+    const pages = await getImage(r.id);
+    if(pages) pages.forEach((p,pi)=>slots.push({ nr:i+1, r, pi, pc:pages.length, data:p }));
+  }
+  for(let k=0;k<slots.length;k++){
+    if(k%2===0){
+      doc.addPage();
+      doc.setFillColor(...BLUE); doc.rect(0,0,210,12,'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
+      doc.text('Belege ' + label, 10, 8);
+      doc.setTextColor(30,30,30);
+    }
+    const it = slots[k];
+    const sx = (k%2===0) ? 10 : 108, sw = 92;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9);
+    doc.text(cut(`Nr. ${it.nr} · ${it.r.haendler}`, 42), sx, 20);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8);
+    doc.text(cut(`${dateShort(it.r.datum)} · ${catById(it.r.kategorie).name} · ${fmtEUR(it.r.betrag)}${it.pc>1 ? ` · S. ${it.pi+1}/${it.pc}` : ''}`, 58), sx, 24.5);
+    const url = 'data:image/jpeg;base64,' + it.data;
+    const props = doc.getImageProperties(url);
+    let w = sw, h = props.height*sw/props.width;
+    const maxH = 262;
+    if(h > maxH){ h = maxH; w = props.width*maxH/props.height; }
+    doc.addImage(url, 'JPEG', sx, 28, w, h);
+    doc.setDrawColor(210,210,210); doc.rect(sx, 28, w, h);
+  }
+  return doc;
+}
+
+async function downloadMonthPdf(key){
+  const btn = document.getElementById('pdfBtn');
+  btn.disabled = true; btn.textContent = 'Erzeuge PDF…';
+  try{
+    const doc = await buildMonthPdf(key);
+    doc.save(`Ausgaben_${key}.pdf`);
+    pdfExports[key] = new Date().toISOString();
+    await idbSet('pdfExports', pdfExports);
+  }catch(e){
+    console.error(e);
+    alert('PDF-Erstellung fehlgeschlagen: ' + (e.message||'unbekannter Fehler'));
+  }finally{
+    btn.disabled = false; btn.textContent = '📄 Monats-PDF speichern';
+    if(currentView==='detail') renderDetail();
+  }
+}
+
+async function offloadImages(key){
+  const mitBild = monthStats(key).list.filter(e=>e.hatBild);
+  if(!mitBild.length) return;
+  const exp = pdfExports[key];
+  const text = exp
+    ? `Das Monats-PDF wurde am ${new Date(exp).toLocaleDateString('de-DE')} gespeichert.\n\nJetzt die ${mitBild.length} Belegbild(er) von ${monthLabel(key)} vom Gerät entfernen? Einträge und Beträge bleiben erhalten.\n\nAchtung: Belege, die nach diesem Datum dazugekommen sind, sind im gespeicherten PDF nicht enthalten.`
+    : `Für ${monthLabel(key)} wurde noch KEIN Monats-PDF gespeichert.\n\nBitte zuerst „Monats-PDF speichern" tippen und die Datei sichern – sonst sind die Belegbilder danach unwiderruflich weg.\n\nTrotzdem entfernen?`;
+  if(!confirm(text)) return;
+  for(const e of mitBild){ await deleteImages(e.id); e.hatBild = false; e.bildAusgelagert = true; }
+  await saveEntries();
+  toast('Bilder entfernt – Einträge bleiben erhalten');
+  renderDetail();
+}
+
+// ---------- Kategorien in den Einstellungen ----------
+function renderCatSettings(){
+  const box = document.getElementById('catSettings');
+  box.innerHTML = categories.map(c=>{
+    const count = entries.filter(e=>e.kategorie===c.id).length;
+    let re = '';
+    if(reassignTarget === c.id){
+      const opts = categories.filter(x=>x.id!==c.id).map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+      re = count
+        ? `<div class="reassign">${count} Eintrag/Einträge in „${esc(c.name)}" – wohin verschieben?
+            <select class="input" id="reassignSel">${opts}</select>
+            <div class="actions" style="margin-top:4px;"><button class="btn small primary" data-confirm="${esc(c.id)}">Verschieben & löschen</button><button class="btn small" data-cancel>Abbrechen</button></div></div>`
+        : `<div class="reassign">Kategorie „${esc(c.name)}" löschen?
+            <div class="actions" style="margin-top:8px;"><button class="btn small primary" data-confirm="${esc(c.id)}">Löschen</button><button class="btn small" data-cancel>Abbrechen</button></div></div>`;
+    }
+    return `<div class="cat-set-row">
+        <input type="color" class="color-in" data-color="${esc(c.id)}" value="${esc(c.color)}">
+        <input class="input" data-rename="${esc(c.id)}" value="${esc(c.name)}">
+        <span class="cnt">${count}</span>
+        <button class="del-btn" data-del="${esc(c.id)}" ${categories.length<=1?'disabled':''}>🗑</button>
+      </div>${re}`;
+  }).join('');
+
+  box.querySelectorAll('[data-color]').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const c = categories.find(x=>x.id===inp.dataset.color);
+      if(c){ c.color = inp.value; await saveCategories(); }
+    });
+  });
+  box.querySelectorAll('[data-rename]').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const c = categories.find(x=>x.id===inp.dataset.rename);
+      const n = inp.value.trim();
+      if(!c) return;
+      if(!n){ inp.value = c.name; return; }
+      if(categories.some(x=>x.id!==c.id && x.name.toLowerCase()===n.toLowerCase())){ alert('Diese Kategorie gibt es schon.'); inp.value = c.name; return; }
+      c.name = n;
+      await saveCategories();
+      toast('Kategorie umbenannt');
+    });
+  });
+  box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', ()=>{ reassignTarget = b.dataset.del; renderCatSettings(); }));
+  box.querySelectorAll('[data-cancel]').forEach(b=>b.addEventListener('click', ()=>{ reassignTarget = null; renderCatSettings(); }));
+  box.querySelectorAll('[data-confirm]').forEach(b=>b.addEventListener('click', async ()=>{
+    const id = b.dataset.confirm;
+    const sel = document.getElementById('reassignSel');
+    const ziel = sel ? sel.value : null;
+    if(ziel) entries.forEach(e=>{ if(e.kategorie===id) e.kategorie = ziel; });
+    categories = categories.filter(c=>c.id!==id);
+    if(detailFilter===id) detailFilter = null;
+    reassignTarget = null;
+    await saveCategories();
+    await saveEntries();
+    renderCatSettings();
+    toast('Kategorie gelöscht');
+  }));
+}
+
+// ---------- Sicherung ----------
+async function createBackup(withImages){
+  const btn = document.getElementById(withImages ? 'backupBtn' : 'backupLightBtn');
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Wird erstellt…';
+  try{
+    const bilder = {};
+    if(withImages){
+      for(const e of entries){ if(e.hatBild){ const p = await getImage(e.id); if(p) bilder[e.id] = p; } }
+    }
+    const text = JSON.stringify({
+      typ:'ausgaben-sicherung', version:APP_VERSION, erstellt:new Date().toISOString(),
+      kategorien:categories, eintraege:entries, pdfExports, bilder
+    });
+    const blob = new Blob([text], { type:'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Ausgaben_Sicherung_${todayISO().replace(/-/g,'')}${withImages?'':'_ohne_Bilder'}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 10000);
+    const mb = (text.length/1048576).toLocaleString('de-DE',{maximumFractionDigits:1});
+    showMsg('backupMsg', `Sicherung erstellt: ${entries.length} Einträge, ${mb} MB. Bitte in Dateien oder iCloud ablegen.`, true);
+  }catch(e){
+    showMsg('backupMsg', 'Sicherung fehlgeschlagen: ' + (e.message||'unbekannter Fehler'), false);
+  }finally{
+    btn.disabled = false; btn.textContent = label;
+  }
+}
+
+async function restoreBackup(file){
+  showMsg('backupMsg', 'Sicherung wird gelesen…', true);
+  try{
+    const d = JSON.parse(await file.text());
+    if(!d || d.typ !== 'ausgaben-sicherung' || !Array.isArray(d.eintraege)){
+      showMsg('backupMsg', 'Das ist keine gültige Sicherungsdatei dieser App.', false); return;
+    }
+    const vorhanden = new Set(entries.map(e=>e.id));
+    const neue = d.eintraege.filter(e=>e && e.id && !vorhanden.has(e.id));
+    if(!neue.length){ showMsg('backupMsg', `Keine neuen Einträge – alle ${d.eintraege.length} sind bereits vorhanden.`, true); return; }
+    if(!confirm(`${neue.length} Eintrag/Einträge aus der Sicherung hinzufügen?\n\nVorhandene Einträge bleiben unverändert.`)) return;
+
+    (d.kategorien||[]).forEach(c=>{ if(c && c.id && !categories.some(x=>x.id===c.id)) categories.push(c); });
+    Object.assign(pdfExports, d.pdfExports || {});
+    let mitBild = 0;
+    for(const e of neue){
+      const p = d.bilder && d.bilder[e.id];
+      if(Array.isArray(p) && p.length){ e.hatBild = await saveImages(e.id, p); if(e.hatBild) mitBild++; }
+      else e.hatBild = false;
+      entries.push(e);
+    }
+    await saveCategories(); await saveEntries(); await idbSet('pdfExports', pdfExports);
+    renderCatSettings(); updateStorageInfo();
+    showMsg('backupMsg', `${neue.length} Einträge eingelesen, davon ${mitBild} mit Bild.`, true);
+  }catch(e){
+    showMsg('backupMsg', 'Einlesen fehlgeschlagen: ' + (e.message||'Datei konnte nicht gelesen werden'), false);
+  }
+}
+
+// ---------- Ereignisse ----------
+document.getElementById('setupSave').addEventListener('click', ()=>{
+  const v = document.getElementById('setupKey').value.trim();
+  const err = document.getElementById('setupError');
+  const fail = t => { err.textContent = t; err.classList.remove('hidden'); };
+  if(!v) return fail('Bitte den API-Key eintragen.');
+  if(!v.startsWith('sk-ant-')) return fail('Das sieht nicht nach einem Anthropic-Key aus – er beginnt mit "sk-ant-".');
+  setApiKey(v); err.classList.add('hidden');
+  updateGate(); showView('scan');
+});
+document.getElementById('setupKey').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('setupSave').click(); });
+document.getElementById('setupSkip').addEventListener('click', ()=>{
+  setupSkipped = true; try{ localStorage.setItem(SKIP_LS,'1'); }catch(e){}
+  updateGate(); showView('scan');
+});
+
+document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click', ()=>showView(b.dataset.nav)));
+document.querySelectorAll('.open-settings').forEach(b=>b.addEventListener('click', ()=>showView('settings')));
+document.getElementById('settingsBack').addEventListener('click', ()=>showView(lastMainView));
+document.getElementById('detailBack').addEventListener('click', ()=>showView('months'));
+document.getElementById('prevMonth').addEventListener('click', ()=>{ detailMonth = shiftMonth(detailMonth,-1); detailFilter=null; renderDetail(); });
+document.getElementById('nextMonth').addEventListener('click', ()=>{ detailMonth = shiftMonth(detailMonth, 1); detailFilter=null; renderDetail(); });
+document.getElementById('pdfBtn').addEventListener('click', ()=>downloadMonthPdf(detailMonth));
+document.getElementById('offloadBtn').addEventListener('click', ()=>offloadImages(detailMonth));
+
+const cameraInput = document.getElementById('cameraInput');
+const fileInput = document.getElementById('fileInput');
+document.getElementById('scanBtn').addEventListener('click', ()=>cameraInput.click());
+document.getElementById('galleryBtn').addEventListener('click', ()=>fileInput.click());
+cameraInput.addEventListener('change', e=>{ const f = Array.from(e.target.files||[]); cameraInput.value=''; handleFiles(f); });
+fileInput.addEventListener('change', e=>{ const f = Array.from(e.target.files||[]); fileInput.value=''; handleFiles(f); });
+document.getElementById('newEntryBtn').addEventListener('click', ()=>{
+  openSheet({ mode:'new', rec:{ id:newId('e'), datum:todayISO(), haendler:'', betrag:'', kategorie:(categories[0]||{}).id, notiz:'' }, images:[] });
+});
+
+document.getElementById('addCatBtn').addEventListener('click', async ()=>{
+  const inp = document.getElementById('newCatInput');
+  const n = inp.value.trim();
+  if(!n) return;
+  if(categories.some(c=>c.name.toLowerCase()===n.toLowerCase())){ alert('Diese Kategorie gibt es schon.'); return; }
+  addCategory(n);
+  await saveCategories();
+  inp.value = '';
+  renderCatSettings();
+  toast('Kategorie hinzugefügt');
+});
+document.getElementById('newCatInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('addCatBtn').click(); });
+
+document.getElementById('saveKeyBtn').addEventListener('click', ()=>{
+  const v = document.getElementById('apiKeyInput').value.trim();
+  if(!v) return showMsg('apiMsg','Bitte einen Key eintragen.', false);
+  if(!v.startsWith('sk-ant-')) return showMsg('apiMsg','Das sieht nicht nach einem Anthropic-Key aus – er beginnt mit "sk-ant-".', false);
+  setApiKey(v);
+  showMsg('apiMsg','Key gespeichert.', true);
+});
+document.getElementById('testKeyBtn').addEventListener('click', async ()=>{
+  const v = document.getElementById('apiKeyInput').value.trim();
+  if(v) setApiKey(v);
+  if(!hasApiKey()) return showMsg('apiMsg','Bitte zuerst einen Key eintragen.', false);
+  const btn = document.getElementById('testKeyBtn');
+  btn.disabled = true; btn.textContent = 'Teste…';
+  try{
+    const res = await callApi({ model:AI_MODEL, max_tokens:4, messages:[{ role:'user', content:'Antworte nur mit: OK' }] });
+    if(res.ok) return showMsg('apiMsg','✓ Verbindung erfolgreich – Scannen funktioniert.', true);
+    let m = ''; try{ const e = await res.json(); m = (e.error && e.error.message) || ''; }catch(x){}
+    if(res.status===401) showMsg('apiMsg','Der API-Key wird abgelehnt (401). Bitte unter console.anthropic.com prüfen.', false);
+    else if(res.status===429) showMsg('apiMsg','Zu viele Anfragen oder Guthaben aufgebraucht (429).', false);
+    else if(res.status===400 && /credit|balance|insufficient/i.test(m)) showMsg('apiMsg','Kein Guthaben mehr – unter console.anthropic.com → Billing aufladen.', false);
+    else if(res.status===404 || /model/i.test(m)) showMsg('apiMsg',`Das Modell "${AI_MODEL}" ist für dieses Konto nicht verfügbar. ${m.slice(0,120)}`, false);
+    else showMsg('apiMsg', 'Fehler ' + res.status + (m ? ': ' + m.slice(0,160) : ''), false);
+  }catch(e){
+    showMsg('apiMsg','Keine Verbindung zu api.anthropic.com möglich: ' + (e.message||'unbekannt'), false);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Verbindung testen';
+  }
+});
+document.getElementById('clearKeyBtn').addEventListener('click', ()=>{
+  if(!confirm('API-Key von diesem Gerät entfernen? Erfasste Ausgaben bleiben erhalten.')) return;
+  clearApiKey();
+  try{ localStorage.removeItem(OLD_KEY_LS); }catch(e){}
+  setupSkipped = true; try{ localStorage.setItem(SKIP_LS,'1'); }catch(e){}
+  document.getElementById('apiKeyInput').value = '';
+  showMsg('apiMsg','Key entfernt.', true);
+});
+
+document.getElementById('backupBtn').addEventListener('click', ()=>createBackup(true));
+document.getElementById('backupLightBtn').addEventListener('click', ()=>createBackup(false));
+document.getElementById('restoreBtn').addEventListener('click', ()=>document.getElementById('restoreInput').click());
+document.getElementById('restoreInput').addEventListener('change', e=>{
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if(f) restoreBackup(f);
+});
+
+document.getElementById('imgViewerClose').addEventListener('click', closeViewer);
+document.getElementById('imgViewer').addEventListener('click', e=>{ if(e.target.id==='imgViewer') closeViewer(); });
+
+// ---------- Installationshinweis ----------
+let deferredPrompt = null;
+const installBanner = document.getElementById('installBanner');
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+let installDismissed = false;
+try{ installDismissed = sessionStorage.getItem('ausgaben_install_dismissed') === '1'; }catch(e){}
+if(!isStandalone && !installDismissed && isIOS) installBanner.style.display = 'flex';
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault(); deferredPrompt = e;
+  if(!isStandalone && !installDismissed){
+    document.getElementById('installBtn').classList.remove('hidden');
+    document.getElementById('installTxt').textContent = 'Auf dem Startbildschirm ablegen';
+    installBanner.style.display = 'flex';
+  }
+});
+document.getElementById('installBtn').addEventListener('click', async ()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt(); await deferredPrompt.userChoice;
+  deferredPrompt = null; installBanner.style.display = 'none';
+});
+document.getElementById('dismissInstall').addEventListener('click', ()=>{
+  installBanner.style.display = 'none';
+  try{ sessionStorage.setItem('ausgaben_install_dismissed','1'); }catch(e){}
+});
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>navigator.serviceWorker.register('service-worker.js').catch(console.error));
+}
+
+// ---------- Start ----------
+async function init(){
+  document.getElementById('verSetup').textContent = APP_VERSION;
+  document.getElementById('verApp').textContent = APP_VERSION;
+  updateGate();
+  await requestPersistentStorage();
+  try{ await loadData(); }
+  catch(e){ categories = DEFAULT_CATEGORIES.map(x=>({...x})); entries = []; }
+  dataLoaded = true;
+  if(!(await idbGet('categories'))) await saveCategories();
+  showView('scan');
+}
+init();
+</script>
+</body>
+</html>
