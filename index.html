@@ -348,7 +348,7 @@
 <script src="lib/jspdf.umd.min.js"></script>
 <script src="lib/pdf.min.js"></script>
 <script>
-const APP_VERSION = "v2";
+const APP_VERSION = "v3";
 const AI_MODEL = "claude-sonnet-5";
 
 // Eigene Schluessel, damit sich die App nicht mit der Belegverwaltung
@@ -392,7 +392,29 @@ function monthLabel(key){
   const s = new Date(y, m-1, 1).toLocaleDateString('de-DE',{month:'long',year:'numeric'});
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-function dateShort(iso){ const [y,m,d]=(iso||'').split('-'); return (y&&m&&d) ? `${d}.${m}.${y}` : '—'; }
+function dateShort(iso){ if(!/^\d{4}-\d{2}-\d{2}$/.test(iso||'')) return '—'; const [y,m,d]=iso.split('-'); return `${d}.${m}.${y}`; }
+// Schutz gegen eingeschleusten Code: nur reine Base64-Bilddaten und echte Farbwerte zulassen
+const isB64 = s => typeof s === 'string' && s.length > 0 && /^[A-Za-z0-9+\/]+={0,2}$/.test(s);
+const safeColor = c => /^#[0-9a-f]{6}$/i.test(c||'') ? c : '#94a3b8';
+function cleanCategory(c){
+  if(!c || typeof c.id !== 'string' || typeof c.name !== 'string') return null;
+  return { id:c.id, name:c.name.slice(0,60), color:safeColor(c.color) };
+}
+function cleanEntry(e){
+  if(!e || typeof e.id !== 'string') return null;
+  const datum = isValidISO(e.datum) ? e.datum : null;
+  if(!datum) return null;
+  const num = v => (v==null || v==='' || isNaN(Number(v))) ? null : Number(v);
+  return {
+    id:e.id, datum,
+    haendler:String(e.haendler||'').slice(0,120), notiz:String(e.notiz||'').slice(0,200),
+    betrag:num(e.betrag) ?? 0, betragOriginal:num(e.betragOriginal),
+    waehrung:/^[A-Z]{3}$/.test(e.waehrung||'') ? e.waehrung : 'EUR', kurs:num(e.kurs) ?? 1,
+    kategorie:String(e.kategorie||''), unsicher:!!e.unsicher, hinweis:String(e.hinweis||'').slice(0,300),
+    hash:typeof e.hash==='string' ? e.hash.slice(0,40) : '', erstellt:typeof e.erstellt==='string' ? e.erstellt.slice(0,30) : '',
+    seiten:num(e.seiten) ?? 0, hatBild:!!e.hatBild, bildAusgelagert:!!e.bildAusgelagert
+  };
+}
 function dayLabel(iso){
   const d = new Date(iso+'T12:00:00');
   if(isNaN(d)) return iso || '—';
@@ -526,9 +548,10 @@ async function idbDelete(key){
 // leere Liste vorhandene Daten ueberschreiben.
 async function loadData(){
   const c = await idbGet('categories');
-  categories = (Array.isArray(c) && c.length) ? c : DEFAULT_CATEGORIES.map(x=>({...x}));
+  const cc = Array.isArray(c) ? c.map(cleanCategory).filter(Boolean) : [];
+  categories = cc.length ? cc : DEFAULT_CATEGORIES.map(x=>({...x}));
   const e = await idbGet('entries');
-  entries = Array.isArray(e) ? e : [];
+  entries = Array.isArray(e) ? e.map(cleanEntry).filter(Boolean) : [];
   const p = await idbGet('pdfExports');
   pdfExports = (p && typeof p === 'object') ? p : {};
 }
@@ -541,6 +564,8 @@ async function saveEntries(){
   if(!(await idbSet('entries', entries))) showWarn('Speichern fehlgeschlagen – der Gerätespeicher ist möglicherweise voll. Bitte eine Sicherung erstellen und Bilder älterer Monate entfernen.');
 }
 async function saveImages(id, pages){
+  pages = Array.isArray(pages) ? pages.filter(isB64) : [];
+  if(!pages.length) return false;
   const ok = await idbSet('img_'+id, pages);
   if(!ok){ showWarn('Das Belegbild konnte nicht gespeichert werden – Gerätespeicher voll? Der Eintrag selbst wurde gespeichert.'); return false; }
   imgCache[id] = pages;
@@ -549,7 +574,8 @@ async function saveImages(id, pages){
 async function getImage(id){
   if(imgCache[id]) return imgCache[id];
   const res = await idbGet('img_'+id);
-  if(Array.isArray(res) && res.length){ imgCache[id] = res; return res; }
+  const ok = Array.isArray(res) ? res.filter(isB64) : [];
+  if(ok.length){ imgCache[id] = ok; return ok; }
   return null;
 }
 async function deleteImages(id){ await idbDelete('img_'+id); delete imgCache[id]; }
@@ -1307,7 +1333,7 @@ function renderCatSettings(){
   box.querySelectorAll('[data-color]').forEach(inp=>{
     inp.addEventListener('change', async ()=>{
       const c = categories.find(x=>x.id===inp.dataset.color);
-      if(c){ c.color = inp.value; await saveCategories(); }
+      if(c){ c.color = safeColor(inp.value); await saveCategories(); }
     });
   });
   box.querySelectorAll('[data-rename]').forEach(inp=>{
@@ -1376,12 +1402,14 @@ async function restoreBackup(file){
       showMsg('backupMsg', 'Das ist keine gültige Sicherungsdatei dieser App.', false); return;
     }
     const vorhanden = new Set(entries.map(e=>e.id));
-    const neue = d.eintraege.filter(e=>e && e.id && !vorhanden.has(e.id));
+    const neue = d.eintraege.map(cleanEntry).filter(e=>e && !vorhanden.has(e.id));
     if(!neue.length){ showMsg('backupMsg', `Keine neuen Einträge – alle ${d.eintraege.length} sind bereits vorhanden.`, true); return; }
     if(!confirm(`${neue.length} Eintrag/Einträge aus der Sicherung hinzufügen?\n\nVorhandene Einträge bleiben unverändert.`)) return;
 
-    (d.kategorien||[]).forEach(c=>{ if(c && c.id && !categories.some(x=>x.id===c.id)) categories.push(c); });
-    Object.assign(pdfExports, d.pdfExports || {});
+    (Array.isArray(d.kategorien) ? d.kategorien : []).map(cleanCategory).forEach(c=>{ if(c && !categories.some(x=>x.id===c.id)) categories.push(c); });
+    if(d.pdfExports && typeof d.pdfExports === 'object'){
+      Object.keys(d.pdfExports).forEach(k=>{ if(/^\d{4}-\d{2}$/.test(k) && typeof d.pdfExports[k]==='string') pdfExports[k] = d.pdfExports[k].slice(0,30); });
+    }
     let mitBild = 0;
     for(const e of neue){
       const p = d.bilder && d.bilder[e.id];
